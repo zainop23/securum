@@ -333,7 +333,7 @@ Open browser at `localhost:3000`. Log in. Select "SUM of amount GROUP BY categor
 5. **Error scenarios to handle & test manually** (using dev compose with sample orgs):
    - One org goes down mid-query → quorum still met → result still returned.
    - Tampered reveal (manually change a value) → commitment mismatch detected.
-   - Below-quorum scenario → query fails gracefully.
+   - Below-quorum scenario → query fails gracefully
 
 6. **Cleanup**:
    - Remove hardcoded secrets, use `.env` everywhere.
