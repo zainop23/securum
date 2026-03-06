@@ -1,0 +1,25 @@
+{
+  "name": "securum",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @securum/shared",
+    "build:all": "npm run build -w @securum/shared && npm run build -w @securum/coordinator",
+    "clean": "rm -rf packages/*/dist packages/*/node_modules",
+    "dev": "docker compose -f docker/docker-compose.yml up --build"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "pg": "^8.20.0",
+    "process": "^0.11.10"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.18.0",
+    "typescript": "^5.9.3"
+  }
+}
