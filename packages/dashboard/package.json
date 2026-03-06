@@ -1,0 +1,9 @@
+{
+  "name": "@securum/dashboard",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Phase 5'",
+    "dev": "echo 'Phase 5'"
+  }
+}

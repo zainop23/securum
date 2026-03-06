@@ -1,0 +1,13 @@
+{
+  "name": "@securum/org-node",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo 'Phase 3'",
+    "dev": "echo 'Phase 3'"
+  },
+  "dependencies": {
+    "@securum/shared": "*"
+  }
+}

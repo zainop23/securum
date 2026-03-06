@@ -1,0 +1,177 @@
+services:
+  postgres-coord:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: securum
+      POSTGRES_PASSWORD: securum
+      POSTGRES_DB: securum_coord
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d
+      - pgdata-coord:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securum"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - securum-net
+
+  coordinator:
+    build:
+      context: ..
+      dockerfile: docker/coordinator.Dockerfile
+    environment:
+      COORDINATOR_PORT: 4000
+      DATABASE_URL: postgresql://securum:securum@postgres-coord:5432/securum_coord
+      JWT_SECRET: dev-secret-change-in-production
+      ANALYST_USER: analyst
+      ANALYST_PASSWORD: analyst123
+      QUORUM_MIN: 2
+      DEFAULT_EPSILON: 1.0
+      MAX_EPSILON_PER_ORG: 10.0
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres-coord:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - securum-net
+
+  postgres-org1:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: securum
+      POSTGRES_PASSWORD: securum
+      POSTGRES_DB: org1_db
+    volumes:
+      - ./dev-seed/seed-org1.sql:/docker-entrypoint-initdb.d/seed.sql
+      - pgdata-org1:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securum"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - securum-net
+
+  postgres-org2:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: securum
+      POSTGRES_PASSWORD: securum
+      POSTGRES_DB: org2_db
+    volumes:
+      - ./dev-seed/seed-org2.sql:/docker-entrypoint-initdb.d/seed.sql
+      - pgdata-org2:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securum"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - securum-net
+
+  postgres-org3:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: securum
+      POSTGRES_PASSWORD: securum
+      POSTGRES_DB: org3_db
+    volumes:
+      - ./dev-seed/seed-org3.sql:/docker-entrypoint-initdb.d/seed.sql
+      - pgdata-org3:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securum"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - securum-net
+
+  org-node-1:
+    build:
+      context: ..
+      dockerfile: docker/org-node.Dockerfile
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgresql://securum:securum@postgres-org1:5432/org1_db
+      ORG_NAME: hospital-alpha
+      SCHEMA_MAP_PATH: config/schema-map.json
+      SUM_SENSITIVITY: 500
+      COORDINATOR_URL: http://coordinator:4000
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres-org1:
+        condition: service_healthy
+    networks:
+      - securum-net
+
+  org-node-2:
+    build:
+      context: ..
+      dockerfile: docker/org-node.Dockerfile
+    environment:
+      PORT: 5002
+      DATABASE_URL: postgresql://securum:securum@postgres-org2:5432/org2_db
+      ORG_NAME: hospital-beta
+      SCHEMA_MAP_PATH: config/schema-map.json
+      SUM_SENSITIVITY: 500
+      COORDINATOR_URL: http://coordinator:4000
+    ports:
+      - "5002:5002"
+    depends_on:
+      postgres-org2:
+        condition: service_healthy
+    networks:
+      - securum-net
+
+  org-node-3:
+    build:
+      context: ..
+      dockerfile: docker/org-node.Dockerfile
+    environment:
+      PORT: 5003
+      DATABASE_URL: postgresql://securum:securum@postgres-org3:5432/org3_db
+      ORG_NAME: hospital-gamma
+      SCHEMA_MAP_PATH: config/schema-map.json
+      SUM_SENSITIVITY: 500
+      COORDINATOR_URL: http://coordinator:4000
+    ports:
+      - "5003:5003"
+    depends_on:
+      postgres-org3:
+        condition: service_healthy
+    networks:
+      - securum-net
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/dashboard.Dockerfile
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      coordinator:
+        condition: service_healthy
+    networks:
+      - securum-net
+
+volumes:
+  pgdata-coord:
+  pgdata-org1:
+  pgdata-org2:
+  pgdata-org3:
+
+networks:
+  securum-net:
+    driver: bridge

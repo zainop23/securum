@@ -1,0 +1,24 @@
+{
+  "name": "@securum/coordinator",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@securum/shared": "*",
+    "express": "^4.21.2",
+    "pg": "^8.13.3",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/pg": "^8.11.11",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3",
+    "ts-node": "^10.9.2"
+  }
+}
