@@ -1,0 +1,11 @@
+{
+  "tables": {
+    "transactions": "purchases"
+  },
+  "columns": {
+    "amount": "price",
+    "category": "item_class",
+    "region": "location",
+    "tx_date": "purchase_date"
+  }
+}
