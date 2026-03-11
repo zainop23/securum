@@ -59,3 +59,15 @@ export interface AuditLog{
   queryId ?: string,
   extraDetails ?: string
 }
+export interface SchemaMap {
+  tables: Record<string,string>;
+  columns: Record<string,string>;
+}
+export type ValidatorResult = 
+|{valid: true; sql:string}
+|{valid:false; error:string};
+
+export interface RewriterResult {
+  sql:string;
+  reverseMap: Record<string,string>;
+}

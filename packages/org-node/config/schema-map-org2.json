@@ -1,0 +1,11 @@
+{
+    "tables":{
+        "transactions": "orders"
+    },
+    "columns":{
+        "amount" : "amount",
+        "category": "category",
+        "region":"area",
+        "tx_date":"order_date"
+    }
+}

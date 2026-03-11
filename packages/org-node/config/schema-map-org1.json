@@ -1,0 +1,11 @@
+{
+    "tables":{
+        "transactions":"sales"
+    },
+    "columns":{
+        "amount" : "total_amount",
+        "category": "product_type",
+        "region":"region",
+        "tx_date":"sale_date"
+    }
+}
