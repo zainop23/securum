@@ -9,6 +9,7 @@
     "test": "vitest run src/__tests__"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.3",
     "vitest": "^4.0.18"
   }

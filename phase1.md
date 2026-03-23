@@ -611,7 +611,7 @@ Run everything in order:
 npm install && npm run build
 
 # 2. Run unit tests
-npm run test -w @securum/shared
+npm run test -w @securum/shared 
 
 # 3. Rebuild containers (destroy old volumes for new seed data)
 docker compose -f docker/docker-compose.yml down -v
@@ -619,8 +619,7 @@ docker compose -f docker/docker-compose.yml up --build
 
 # 4. Verify seed data (in a new terminal)
 # Org 1:
-docker exec -it $(docker ps -qf name=postgres-org1) psql -U securum -d org1_db -c 'SELECT COUNT(*) FROM sales;'
-# → 10000
+ # → 10000
 
 # Org 2:
 docker exec -it $(docker ps -qf name=postgres-org2) psql -U securum -d org2_db -c 'SELECT COUNT(*) FROM orders;'
@@ -631,7 +630,7 @@ docker exec -it $(docker ps -qf name=postgres-org3) psql -U securum -d org3_db -
 # → 10000
 
 # 5. Verify coordinator still works
-curl http://localhost:4000/health
+curl http://localhost:4000/health 
 # → {"status":"ok","db":"connected"}
 
 # 6. Quick sanity check on actual data
