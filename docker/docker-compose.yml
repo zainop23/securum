@@ -103,8 +103,9 @@ services:
       PORT: 5001
       DATABASE_URL: postgresql://securum:securum@postgres-org1:5432/org1_db
       ORG_NAME: hospital-alpha
-      SCHEMA_MAP_PATH: config/schema-map.json
+      SCHEMA_MAP_PATH: packages/org-node/config/schema-map-org1.json
       SUM_SENSITIVITY: 500
+      DEFAULT_EPSILON: 1.0
       COORDINATOR_URL: http://coordinator:4000
     ports:
       - "5001:5001"
@@ -122,8 +123,9 @@ services:
       PORT: 5002
       DATABASE_URL: postgresql://securum:securum@postgres-org2:5432/org2_db
       ORG_NAME: hospital-beta
-      SCHEMA_MAP_PATH: config/schema-map.json
+      SCHEMA_MAP_PATH: packages/org-node/config/schema-map-org2.json
       SUM_SENSITIVITY: 500
+      DEFAULT_EPSILON: 1.0
       COORDINATOR_URL: http://coordinator:4000
     ports:
       - "5002:5002"
@@ -141,8 +143,9 @@ services:
       PORT: 5003
       DATABASE_URL: postgresql://securum:securum@postgres-org3:5432/org3_db
       ORG_NAME: hospital-gamma
-      SCHEMA_MAP_PATH: config/schema-map.json
+      SCHEMA_MAP_PATH: packages/org-node/config/schema-map-org3.json
       SUM_SENSITIVITY: 500
+      DEFAULT_EPSILON: 1.0
       COORDINATOR_URL: http://coordinator:4000
     ports:
       - "5003:5003"

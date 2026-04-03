@@ -10,4 +10,5 @@ RUN npm install
 COPY packages/shared packages/shared
 COPY packages/org-node packages/org-node
 RUN npm run build -w @securum/shared
-CMD ["echo", "org-node placeholder — not implemented yet"]
+RUN npm run build -w @securum/org-node
+CMD ["node", "packages/org-node/dist/index.js"]
