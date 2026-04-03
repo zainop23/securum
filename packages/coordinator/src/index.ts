@@ -3,6 +3,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { validateAndBuildQuery, QueryDefinition } from '@securum/shared';
+import { runOrchestration } from './orchestration/engine';
 import { config } from './config';
 import { pool } from './db';
 
@@ -218,7 +219,23 @@ app.post(
     );
 
     await logAuditEvent(queryId, null, 'QUERY_SUBMITTED', { submittedBy: submitter });
-    res.status(201).json({ queryId, status: 'pending' });
+
+    // Run full commit–reveal orchestration synchronously
+    const orchestrationResult = await runOrchestration(pool, queryId, def, epsilon);
+
+    if (orchestrationResult.ok) {
+      res.json({
+        queryId: orchestrationResult.queryId,
+        status: 'done',
+        result: orchestrationResult.result,
+      });
+    } else {
+      res.json({
+        queryId: orchestrationResult.queryId,
+        status: 'failed',
+        error: orchestrationResult.error,
+      });
+    }
   })
 );
 

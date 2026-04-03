@@ -6,6 +6,8 @@ import { pool } from './db';
 import { loadAndValidateSchemaMap, LoadedSchemaMap } from './schema';
 import { executeQuery } from './executor';
 import { applyNoise } from './noise';
+import commitRouter from './routes/commit';
+import revealRouter from './routes/reveal';
 
 type ErrorCode = 'INVALID_QUERY' | 'SCHEMA_MISMATCH' | 'DB_ERROR' | 'TIMEOUT';
 
@@ -36,6 +38,12 @@ app.get('/health', async (_req, res) => {
     res.status(503).json({ status: 'error', db: 'disconnected', orgName: config.orgName });
   }
 });
+
+// ---------- POST /commit ----------
+app.use(commitRouter);
+
+// ---------- POST /reveal ----------
+app.use(revealRouter);
 
 // ---------- POST /execute ----------
 app.post('/execute', async (req, res) => {

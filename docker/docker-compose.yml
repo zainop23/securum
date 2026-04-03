@@ -22,8 +22,9 @@ services:
     build:
       context: ..
       dockerfile: docker/coordinator.Dockerfile
+    restart: on-failure
     environment:
-      COORDINATOR_PORT: 4000
+      PORT: 4000
       DATABASE_URL: postgresql://securum:securum@postgres-coord:5432/securum_coord
       JWT_SECRET: dev-secret-change-in-production
       ANALYST_USER: analyst
@@ -99,6 +100,7 @@ services:
     build:
       context: ..
       dockerfile: docker/org-node.Dockerfile
+    restart: on-failure
     environment:
       PORT: 5001
       DATABASE_URL: postgresql://securum:securum@postgres-org1:5432/org1_db
@@ -119,6 +121,7 @@ services:
     build:
       context: ..
       dockerfile: docker/org-node.Dockerfile
+    restart: on-failure
     environment:
       PORT: 5002
       DATABASE_URL: postgresql://securum:securum@postgres-org2:5432/org2_db
@@ -139,6 +142,7 @@ services:
     build:
       context: ..
       dockerfile: docker/org-node.Dockerfile
+    restart: on-failure
     environment:
       PORT: 5003
       DATABASE_URL: postgresql://securum:securum@postgres-org3:5432/org3_db
