@@ -53,7 +53,7 @@ A self-hosted, Docker-based platform that lets multiple organizations compute jo
 | **3** | Rahul | Org Services | Org-Node Express app, local query executor, DP wrapper |
 | **4** | Zain | Protocol & Aggregation | Commit–Reveal protocol, orchestration engine, global aggregation |
 | **5** | Rahul | Frontend & UX | React dashboard (login, query builder, results, charts) + dashboard Dockerfile |
-| **6** | Both | Polish | Docs, demo script, cleanup |
+| **6** | Both | SaaS Platform | Org self-registration, onboarding wizard, RBAC, team management, admin panel, multi-tenancy |
 
 > **Workflow:** Zain does Phase 0 and pushes → Rahul pulls and does Phase 1 and pushes → Zain pulls and does Phase 2 … and so on.
 
@@ -469,49 +469,39 @@ Open `localhost:3000`. Log in. Submit "SUM of amount GROUP BY category" with eps
 
 ---
 
-## Phase 6 — Polish, Documentation & Demo-Readiness *(Both)*
+## Phase 6 — SaaS Platform: Org Registration, Onboarding & Full Workflow *(Both)*
 
-> **Milestone:** Project is demo-ready and can be spun up by anyone with `docker compose up`. This phase is collaborative — split tasks as needed.
+> **Milestone:** Securum is a proper multi-tenant SaaS platform. Organizations can self-register, onboard their nodes, manage their teams, and go through a complete lifecycle — from sign-up to running privacy-preserving queries. An admin panel provides platform-wide oversight.
 
-### Tasks
+> **Full implementation details:** See [phase6.md](phase6.md) for the complete task breakdown, API specs, DB schema changes, and verification steps.
 
-1. **Docker compose finalization**:
-   - `docker compose up --build` boots the full demo stack.
-   - Add healthchecks to all services with proper `depends_on` conditions.
-   - Seed data runs automatically on first boot.
+### Key Additions
 
-2. **README.md**:
-   - Project description + architecture diagram (Mermaid).
-   - Quick start: `git clone` → `docker compose up` → open browser.
-   - API reference (all endpoints, request/response shapes).
-   - Threat model summary (reference the PLAN.md section).
+1. **Auth system overhaul** — Replace hardcoded `ANALYST_USER/ANALYST_PASSWORD` with a full user system (bcrypt, registration, role-based JWT).
+2. **RBAC** — Four roles: `platform_admin`, `org_admin`, `analyst`, `viewer`. Permission matrix for all endpoints.
+3. **Org self-registration** — `POST /auth/register` creates org + admin user + settings in a single transaction.
+4. **Onboarding wizard** — Multi-step guided setup: org details → node endpoint → schema map → API key → connectivity test.
+5. **Team management** — Email-based invite system with role assignment.
+6. **Admin panel** — Platform-wide org/user/query/audit management.
+7. **Multi-tenancy safety** — Org-scoped data isolation, rate limiting.
+8. **Landing page** — Public marketing page with sign-up CTA.
+9. **Privacy budget dashboard** — Visual budget consumption tracking per org.
+10. **Simulated email notifications** — Console-logged email stubs for registration, invites, and alerts.
 
-3. **Automated end-to-end test** (`test-e2e.sh`):
-   - Bash script that runs after `docker compose up`:
-     1. Waits for all services to be healthy (poll `/health` endpoints).
-     2. Logs in → gets JWT.
-     3. Registers 3 orgs → stores API keys.
-     4. Submits a COUNT query → asserts status is `done` and result is a number.
-     5. Submits a SUM GROUP BY query → asserts grouped results are returned.
-     6. Verifies audit log has entries for the query.
-     7. Prints PASS/FAIL summary.
-   - Uses only `curl` and `jq` — no extra dependencies.
-   - **Add a `jq` check** at the top of the script: `command -v jq >/dev/null || { echo "Install jq: brew install jq"; exit 1; }`. `jq` isn't installed by default on macOS or many Linux distros.
-   - **Why this matters:** An automated integration test that anyone can run with one command is far more impressive than "we tested with curl manually."
+### New DB Tables
 
-4. **Cleanup**:
-   - Secrets in `.env` file (no hardcoded values in code).
-   - Root `.gitignore` finalized.
-   - MIT license file.
+`users`, `org_invitations`, `org_settings`, `onboarding_progress`, `api_keys`, `refresh_tokens`
 
 ### Gotchas
 
-- **First `docker compose up` on a clean machine takes 5–10 minutes.** Downloading images + building 4 containers + seeding 3 DBs is slow. Pre-pull images the night before a demo: `docker compose pull && docker compose build`.
-- **Init SQL only runs once.** If you change the coordinator DB schema during polish, you must `docker compose down -v` first. Add this as a comment in README.
+- **Transaction safety on registration** — Org + user + settings must be created atomically.
+- **JWT claims migration** — Changing `sub` from username to userId invalidates existing tokens.
+- **Role escalation prevention** — Org admins must not be able to create platform admins.
+- **Backward compatibility** — Legacy `ANALYST_USER/ANALYST_PASSWORD` login should still work if no users exist in DB.
 
 ### Verification
 
-Clone repo on a clean machine. `docker compose up --build`. Run `./test-e2e.sh` — all checks pass. Open `localhost:3000` — full UI flow works.
+Open `localhost:3000` → Landing page → Sign up → Onboarding wizard → Connect node → Run query → View results. Login as admin → See all orgs. Invite team member → Accept invite → Query as analyst.
 
 ---
 
@@ -525,10 +515,10 @@ Clone repo on a clean machine. `docker compose up --build`. Run `./test-e2e.sh` 
 | **3** | Rahul | Org-Node service + local execution + DP wrapper | 2 days |
 | **4** | Zain | Commit–Reveal + orchestration + global aggregation | 3 days |
 | **5** | Rahul | React Dashboard + dashboard Dockerfile | 3 days |
-| **6** | Both | Polish, docs, demo script | 1 day |
-| | | **Total (wall clock, sequential)** | **~15 days** |
+| **6** | Both | SaaS Platform: org registration, onboarding, RBAC, admin panel | 5–7 days |
+| | | **Total (wall clock, sequential)** | **~20–22 days** |
 
-> Wall-clock time per person: Zain ~7 days, Rahul ~7 days, +1 day shared. Each person is idle while the other works — use that time for reading ahead, reviewing the previous phase, or working on docs early.
+> Phase 6 is collaborative — Zain handles backend (auth, APIs, multi-tenancy) while Rahul builds the frontend (landing, onboarding wizard, admin UI). They can work in parallel once the auth API is complete (~4 days Zain, ~3 days Rahul in parallel).
 
 ---
 
