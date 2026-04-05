@@ -16,14 +16,14 @@ interface Props {
 }
 
 const STEP_ICONS: Record<string, { icon: string; label: string }> = {
-  connected:        { icon: '🔗', label: 'Connection' },
-  budget_check:     { icon: '🔒', label: 'Privacy Budget' },
-  commit_broadcast: { icon: '📡', label: 'Commit Phase' },
-  reveal_verify:    { icon: '🔍', label: 'Reveal & Verify' },
-  aggregation:      { icon: '📊', label: 'Aggregation' },
-  finalize:         { icon: '💾', label: 'Finalization' },
-  complete:         { icon: '✅', label: 'Complete' },
-  error:            { icon: '❌', label: 'Error' },
+  connected:        { icon: '', label: 'Connection' },
+  budget_check:     { icon: '', label: 'Privacy Budget' },
+  commit_broadcast: { icon: '', label: 'Commit Phase' },
+  reveal_verify:    { icon: '', label: 'Reveal & Verify' },
+  aggregation:      { icon: '', label: 'Aggregation' },
+  finalize:         { icon: '', label: 'Finalization' },
+  complete:         { icon: '', label: 'Complete' },
+  error:            { icon: '', label: 'Error' },
 };
 
 export default function OrchestrationProgress({ queryId, onComplete, onError, onCancel }: Props) {
