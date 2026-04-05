@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import OrchestrationProgress from '../components/OrchestrationProgress';
 
 const AGGREGATES = ['COUNT', 'SUM', 'AVG'] as const;
 const COLUMNS = ['amount', 'category', 'region', 'tx_date'];
@@ -15,10 +16,14 @@ export default function QueryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Orchestration progress state
+  const [activeQueryId, setActiveQueryId] = useState<string | null>(null);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    setActiveQueryId(null);
 
     try {
       const payload: Record<string, unknown> = {
@@ -34,16 +39,28 @@ export default function QueryPage() {
       const { data } = await client.post('/query', payload);
 
       if (data.queryId) {
-        navigate(`/results/${data.queryId}`);
+        // Show the live orchestration progress
+        setActiveQueryId(data.queryId);
       }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Query execution failed. Please try again.';
+        'Query submission failed. Please try again.';
       setError(msg);
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleOrchestrationComplete = () => {
+    if (activeQueryId) {
+      navigate(`/results/${activeQueryId}`);
+    }
+  };
+
+  const handleOrchestrationError = (errorMsg: string) => {
+    setError(errorMsg || 'Query execution failed.');
+    setLoading(false);
+    setActiveQueryId(null);
   };
 
   const getPrivacyLabel = () => {
@@ -103,8 +120,15 @@ export default function QueryPage() {
                 <select
                   id="query-aggregate"
                   value={aggregate}
-                  onChange={(e) => setAggregate(e.target.value)}
+                  onChange={(e) => {
+                    const newAgg = e.target.value;
+                    setAggregate(newAgg);
+                    if ((newAgg === 'SUM' || newAgg === 'AVG') && column !== 'amount') {
+                      setColumn('amount');
+                    }
+                  }}
                   className="input-field"
+                  disabled={!!activeQueryId}
                 >
                   {AGGREGATES.map((agg) => (
                     <option key={agg} value={agg}>
@@ -124,12 +148,16 @@ export default function QueryPage() {
                   value={column}
                   onChange={(e) => setColumn(e.target.value)}
                   className="input-field"
+                  disabled={!!activeQueryId}
                 >
-                  {COLUMNS.map((col) => (
-                    <option key={col} value={col}>
-                      {col}
-                    </option>
-                  ))}
+                  {COLUMNS.map((col) => {
+                    const isDisabled = (aggregate === 'SUM' || aggregate === 'AVG') && col !== 'amount';
+                    return (
+                      <option key={col} value={col} disabled={isDisabled}>
+                        {col} {isDisabled ? '(numeric only)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -154,6 +182,7 @@ export default function QueryPage() {
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value)}
                   className="input-field"
+                  disabled={!!activeQueryId}
                 >
                   {GROUP_COLUMNS.map((col) => (
                     <option key={col} value={col}>
@@ -177,12 +206,13 @@ export default function QueryPage() {
                     step="0.1"
                     value={epsilon}
                     onChange={(e) => setEpsilon(parseFloat(e.target.value))}
+                    disabled={!!activeQueryId}
                     style={{
                       flex: 1,
                       height: 8,
                       borderRadius: 9999,
                       appearance: 'none',
-                      cursor: 'pointer',
+                      cursor: activeQueryId ? 'not-allowed' : 'pointer',
                       background: 'linear-gradient(90deg, #14B8A6, #FCD34D, #F87171)',
                       outline: 'none',
                     }}
@@ -213,7 +243,7 @@ export default function QueryPage() {
                 {loading ? (
                   <>
                     <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} />
-                    Executing Query...
+                    Processing…
                   </>
                 ) : (
                   <>
@@ -227,8 +257,21 @@ export default function QueryPage() {
             </form>
           </div>
 
-          {/* Info Panel */}
+          {/* Right Panel — Progress or Info */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {/* Live Orchestration Progress */}
+            {activeQueryId && (
+              <OrchestrationProgress
+                queryId={activeQueryId}
+                onComplete={handleOrchestrationComplete}
+                onError={handleOrchestrationError}
+                onCancel={() => {
+                  setActiveQueryId(null);
+                  setLoading(false);
+                }}
+              />
+            )}
+
             {/* Query Preview */}
             <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.2s' }}>
               <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>Query Preview</h3>
@@ -242,7 +285,7 @@ export default function QueryPage() {
                 lineHeight: 1.8,
               }}>
                 SELECT {groupBy ? `${groupBy}, ` : ''}
-                {aggregate === 'AVG' ? `SUM(${column}), COUNT(${column})` : `${aggregate}(${column})`}
+                {aggregate}({column})
                 <br />
                 FROM transactions
                 {groupBy && (
@@ -254,38 +297,41 @@ export default function QueryPage() {
               </div>
             </div>
 
-            {/* How It Works */}
-            <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.3s' }}>
-              <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>How It Works</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {[
-                  { step: '1', label: 'Query is sent to the coordinator' },
-                  { step: '2', label: 'Coordinator broadcasts to all org-nodes' },
-                  { step: '3', label: 'Each org executes locally & adds DP noise' },
-                  { step: '4', label: 'Commit-reveal protocol verifies integrity' },
-                  { step: '5', label: 'Results are aggregated & returned' },
-                ].map((item) => (
-                  <div key={item.step} className="flex items-start gap-3">
-                    <div
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 24, height: 24,
-                        borderRadius: 9999,
-                        background: 'rgba(99,102,241,0.15)',
-                        flexShrink: 0,
-                        marginTop: 2,
-                      }}
-                    >
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#818cf8' }}>{item.step}</span>
+            {/* How It Works — hide when progress is showing */}
+            {!activeQueryId && (
+              <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.3s' }}>
+                <h3 style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>How It Works</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {[
+                    { step: '1', label: 'Query is sent to the coordinator' },
+                    { step: '2', label: 'Coordinator broadcasts to all org-nodes' },
+                    { step: '3', label: 'Each org executes locally & adds DP noise' },
+                    { step: '4', label: 'Commit-reveal protocol verifies integrity' },
+                    { step: '5', label: 'Results are aggregated & returned' },
+                  ].map((item) => (
+                    <div key={item.step} className="flex items-start gap-3">
+                      <div
+                        className="flex items-center justify-center"
+                        style={{
+                          width: 24, height: 24,
+                          borderRadius: 9999,
+                          background: 'rgba(99,102,241,0.15)',
+                          flexShrink: 0,
+                          marginTop: 2,
+                        }}
+                      >
+                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#818cf8' }}>{item.step}</span>
+                      </div>
+                      <p style={{ fontSize: '0.875rem', color: '#94A3B8' }}>{item.label}</p>
                     </div>
-                    <p style={{ fontSize: '0.875rem', color: '#94A3B8' }}>{item.label}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 }
+

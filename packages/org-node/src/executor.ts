@@ -79,7 +79,7 @@ function normalizeResult(
     if (!Number.isFinite(value)) {
       throw new Error(`Non-finite scalar result: ${row[key]}`);
     }
-    return { type: 'scalar', value };
+    return { type: 'scalar', value, isCount: queryDef.aggregate === 'COUNT' };
   }
 
   if (!isGrouped && isAvg) {
@@ -105,7 +105,7 @@ function normalizeResult(
       }
       return { groupKey, value };
     });
-    return { type: 'grouped', groups };
+    return { type: 'grouped', groups, isCount: queryDef.aggregate === 'COUNT' };
   }
 
   // Grouped AVG (sum + count per group)

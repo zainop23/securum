@@ -6,13 +6,54 @@
  *
  * Called synchronously from POST /query — returns the final result (or failure)
  * in a single HTTP response.
+ *
+ * Emits progress events via an EventEmitter so the frontend can show
+ * real-time step-by-step logs via SSE.
  */
 
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
+import { EventEmitter } from 'events';
 import { computeCommitment, QueryDefinition } from '@securum/shared';
 import { aggregateResults, NoisyResult } from './aggregation';
 import { config } from '../config';
+
+// ---------------------------------------------------------------------------
+// Progress Events
+// ---------------------------------------------------------------------------
+
+export interface ProgressEvent {
+  step: string;
+  status: 'running' | 'done' | 'error';
+  message: string;
+  detail?: string;
+  timestamp: number;
+}
+
+/**
+ * In-memory map of queryId → EventEmitter.
+ * Each emitter fires 'progress' events during orchestration.
+ * Cleaned up after the pipeline completes.
+ */
+const queryEmitters = new Map<string, EventEmitter>();
+
+export function getQueryEmitter(queryId: string): EventEmitter | undefined {
+  return queryEmitters.get(queryId);
+}
+
+function emitProgress(
+  queryId: string,
+  step: string,
+  status: ProgressEvent['status'],
+  message: string,
+  detail?: string
+): void {
+  const emitter = queryEmitters.get(queryId);
+  if (emitter) {
+    const event: ProgressEvent = { step, status, message, detail, timestamp: Date.now() };
+    emitter.emit('progress', event);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -227,12 +268,13 @@ async function broadcastRevealAndVerify(
       const data = result.value.data as {
         queryId: string;
         noisyResult: NoisyResult;
+        resultStr: string;
         nonce: string;
       };
 
       // Recompute commitment and compare
       const recomputed = computeCommitment(
-        JSON.stringify(data.noisyResult),
+        data.resultStr,
         data.nonce,
         queryId
       );
@@ -329,22 +371,39 @@ async function _runPipeline(
     return { ok: false, queryId, status: 'failed', error };
   };
 
+  // Create an EventEmitter for this query so SSE clients can subscribe
+  const emitter = new EventEmitter();
+  queryEmitters.set(queryId, emitter);
+
+  const cleanupEmitter = () => {
+    // Give SSE clients a moment to receive the final event before cleanup
+    setTimeout(() => {
+      emitter.removeAllListeners();
+      queryEmitters.delete(queryId);
+    }, 5_000);
+  };
+
   try {
     // ---- Step 1: Privacy budget check ----
+    emitProgress(queryId, 'budget_check', 'running', 'Checking privacy budgets…');
     console.log(`[orchestration] Query ${queryId}: checking privacy budgets...`);
     const eligibleOrgs = await getEligibleOrgs(dbPool, epsilon, queryId);
 
     if (eligibleOrgs.length < config.quorumMin) {
+      emitProgress(queryId, 'budget_check', 'error', 'Not enough orgs within budget', `${eligibleOrgs.length} eligible, ${config.quorumMin} required`);
+      cleanupEmitter();
       return fail(
         `Not enough orgs within budget: ${eligibleOrgs.length} eligible, ${config.quorumMin} required`
       );
     }
 
+    emitProgress(queryId, 'budget_check', 'done', `${eligibleOrgs.length} organizations eligible`, eligibleOrgs.map(o => o.name).join(', '));
     console.log(
       `[orchestration] Query ${queryId}: ${eligibleOrgs.length} orgs eligible (quorum=${config.quorumMin})`
     );
 
     // ---- Step 2: Commit phase ----
+    emitProgress(queryId, 'commit_broadcast', 'running', `Broadcasting commit to ${eligibleOrgs.length} org nodes…`, eligibleOrgs.map(o => o.name).join(', '));
     await updateQueryStatus(dbPool, queryId, 'committing');
     await logAuditEvent(dbPool, queryId, null, 'STATUS_COMMITTING', {
       orgs: eligibleOrgs.map((o) => o.name),
@@ -354,14 +413,18 @@ async function _runPipeline(
 
     // Quorum check after commit
     if (commits.length < config.quorumMin) {
+      emitProgress(queryId, 'commit_broadcast', 'error', 'Quorum not met during commit', `${commits.length} committed, ${config.quorumMin} required`);
+      cleanupEmitter();
       return fail(
         `Quorum not met during commit phase: ${commits.length} committed, ${config.quorumMin} required`
       );
     }
 
+    emitProgress(queryId, 'commit_broadcast', 'done', `${commits.length}/${eligibleOrgs.length} org nodes committed`, commits.map(c => c.org.name).join(', '));
     console.log(`[orchestration] Query ${queryId}: ${commits.length}/${eligibleOrgs.length} committed — quorum met`);
 
     // ---- Step 3: Reveal + verify phase ----
+    emitProgress(queryId, 'reveal_verify', 'running', 'Requesting reveals & verifying commitments…');
     await updateQueryStatus(dbPool, queryId, 'revealing');
     await logAuditEvent(dbPool, queryId, null, 'STATUS_REVEALING', {
       committedOrgs: commits.map((c) => c.org.name),
@@ -371,20 +434,26 @@ async function _runPipeline(
 
     // Post-reveal quorum check
     if (verified.length < config.quorumMin) {
+      emitProgress(queryId, 'reveal_verify', 'error', 'Quorum not met after verification', `${verified.length} verified, ${config.quorumMin} required`);
+      cleanupEmitter();
       return fail(
         `Quorum not met after verification: ${verified.length} verified, ${config.quorumMin} required`
       );
     }
 
+    emitProgress(queryId, 'reveal_verify', 'done', `${verified.length}/${commits.length} reveals verified`, verified.map(v => v.org.name).join(', '));
     console.log(
       `[orchestration] Query ${queryId}: ${verified.length}/${commits.length} verified — aggregating`
     );
 
     // ---- Step 4: Global aggregation ----
+    emitProgress(queryId, 'aggregation', 'running', 'Aggregating results with differential privacy…');
     const noisyResults = verified.map((v) => v.noisyResult);
     const globalResult = aggregateResults(noisyResults);
+    emitProgress(queryId, 'aggregation', 'done', 'Global aggregation complete');
 
     // ---- Step 5: Store result and record privacy spend ----
+    emitProgress(queryId, 'finalize', 'running', 'Storing results & recording privacy spend…');
     await dbPool.query(
       'INSERT INTO results (id, query_id, global_result, created_at) VALUES ($1, $2, $3::jsonb, NOW())',
       [randomUUID(), queryId, JSON.stringify(globalResult)]
@@ -406,12 +475,16 @@ async function _runPipeline(
       totalOrgs: eligibleOrgs.length,
     });
 
+    emitProgress(queryId, 'complete', 'done', `Query complete — ${verified.length} org nodes participated`);
     console.log(`[orchestration] Query ${queryId}: DONE ✓ (${verified.length} orgs)`);
 
+    cleanupEmitter();
     return { ok: true, queryId, status: 'done', result: globalResult };
   } catch (err) {
     const message = (err as Error).message ?? String(err);
+    emitProgress(queryId, 'error', 'error', 'Orchestration error', message);
     console.error(`[orchestration] Query ${queryId}: unexpected error — ${message}`);
+    cleanupEmitter();
     return fail(`Internal orchestration error: ${message}`);
   }
 }

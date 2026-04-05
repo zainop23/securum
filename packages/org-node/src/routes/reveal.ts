@@ -50,6 +50,7 @@ router.post('/reveal', async (req, res) => {
   res.json({
     queryId,
     noisyResult: stored.noisyResult,
+    resultStr: stored.resultStr,
     nonce: stored.nonce,
   });
 });

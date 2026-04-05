@@ -15,7 +15,8 @@ export function applyNoise(result: LocalResult, epsilon: number): NoisyResult {
 
   switch (result.type) {
     case 'scalar': {
-      const noisyValue = addLaplaceNoise(result.value, sensitivity.sum, epsilon);
+      const s = result.isCount ? sensitivity.count : sensitivity.sum;
+      const noisyValue = addLaplaceNoise(result.value, s, epsilon);
       return {
         type: 'scalar',
         value: ensureFinite(noisyValue),
@@ -33,9 +34,10 @@ export function applyNoise(result: LocalResult, epsilon: number): NoisyResult {
     }
 
     case 'grouped': {
+      const s = result.isCount ? sensitivity.count : sensitivity.sum;
       const groups = result.groups.map((g) => ({
         groupKey: g.groupKey,
-        value: ensureFinite(addLaplaceNoise(g.value, sensitivity.sum, epsilon)),
+        value: ensureFinite(addLaplaceNoise(g.value, s, epsilon)),
       }));
       return { type: 'grouped', groups };
     }

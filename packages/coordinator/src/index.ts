@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { validateAndBuildQuery, QueryDefinition } from '@securum/shared';
 import { runOrchestration } from './orchestration/engine';
+import { getQueryEmitter, ProgressEvent } from './orchestration/engine';
 import { config } from './config';
 import { pool } from './db';
 
@@ -61,13 +62,20 @@ const asyncHandler =
   };
 
 function requireJwt(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  let token = '';
+
   const authHeader = req.header('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice('Bearer '.length).trim();
+  } else if (req.query.token && typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
+
+  if (!token) {
     sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
     return;
   }
 
-  const token = authHeader.slice('Bearer '.length).trim();
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as JwtClaims;
     if (!decoded?.sub || decoded.role !== 'analyst') {
@@ -220,22 +228,109 @@ app.post(
 
     await logAuditEvent(queryId, null, 'QUERY_SUBMITTED', { submittedBy: submitter });
 
-    // Run full commit–reveal orchestration synchronously
-    const orchestrationResult = await runOrchestration(pool, queryId, def, epsilon);
+    // Return queryId immediately so the frontend can subscribe to SSE
+    // before orchestration progresses. Orchestration runs in the background.
+    res.status(202).json({ queryId, status: 'processing' });
 
-    if (orchestrationResult.ok) {
-      res.json({
-        queryId: orchestrationResult.queryId,
-        status: 'done',
-        result: orchestrationResult.result,
-      });
-    } else {
-      res.json({
-        queryId: orchestrationResult.queryId,
-        status: 'failed',
-        error: orchestrationResult.error,
+    // Fire-and-forget: run orchestration in background
+    // The frontend will track progress via GET /query/:queryId/events (SSE)
+    // and fetch the final result from GET /results/:queryId
+    runOrchestration(pool, queryId, def, epsilon).catch((err) => {
+      console.error(`[orchestration] Background failure for ${queryId}:`, err);
+    });
+  })
+);
+
+// ── SSE: stream real-time orchestration progress ──
+app.get(
+  '/query/:queryId/events',
+  requireJwt,
+  (req: express.Request<{ queryId: string }>, res) => {
+    const { queryId } = req.params;
+
+    // SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // disable nginx buffering
+    });
+
+    // Send an initial connected event
+    res.write(`data: ${JSON.stringify({ step: 'connected', status: 'done', message: 'Connected to query progress stream', timestamp: Date.now() })}\n\n`);
+
+    const emitter = getQueryEmitter(queryId);
+    if (!emitter) {
+      // Query already finished or doesn't exist — send a done event and close
+      res.write(`data: ${JSON.stringify({ step: 'complete', status: 'done', message: 'Query already completed', timestamp: Date.now() })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const onProgress = (event: ProgressEvent) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+      // Close after terminal events
+      if (event.step === 'complete' || event.step === 'error') {
+        setTimeout(() => res.end(), 200);
+      }
+    };
+
+    emitter.on('progress', onProgress);
+
+    // Heartbeat every 15s to keep the connection alive
+    const heartbeat = setInterval(() => {
+      res.write(': heartbeat\n\n');
+    }, 15_000);
+
+    // Clean up when client disconnects
+    req.on('close', () => {
+      emitter.removeListener('progress', onProgress);
+      clearInterval(heartbeat);
+    });
+  }
+);
+
+// ── Cancel ongoing query ──
+app.post(
+  '/query/:queryId/cancel',
+  requireJwt,
+  asyncHandler(async (req, res) => {
+    const queryId = req.params.queryId as string;
+    const submitter = (req as AuthenticatedRequest).user?.sub;
+    
+    const result = await pool.query(
+      `SELECT status FROM queries WHERE id = $1 AND submitted_by = $2`,
+      [queryId, submitter]
+    );
+
+    if (result.rowCount === 0) {
+      sendError(res, 404, 'Query not found', 'INVALID_QUERY');
+      return;
+    }
+
+    const status = result.rows[0].status;
+    if (status === 'done' || status === 'failed') {
+      res.json({ ok: false, message: 'Query already finished or failed' });
+      return;
+    }
+
+    // Attempt to mark as failed
+    await pool.query(`UPDATE queries SET status = 'failed' WHERE id = $1`, [queryId]);
+
+    // Emit event so anyone listening knows it's cancelled
+    const emitter = getQueryEmitter(queryId);
+    if (emitter) {
+      emitter.emit('progress', {
+        step: 'error',
+        status: 'error',
+        message: 'Query cancelled by user',
+        detail: 'The orchestration pipeline was manually aborted.',
+        timestamp: Date.now()
       });
     }
+
+    res.json({ ok: true });
   })
 );
 

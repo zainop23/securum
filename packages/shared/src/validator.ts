@@ -19,6 +19,12 @@ export function validateAndBuildQuery(query: QueryDefinition):ValidatorResult{
     if (query.grouping !== undefined && !allowedColumns.includes(query.grouping)){
         return {valid:false,error:`Grouping column ${query.grouping} is not in the global schema for table '${table}'`}
     }
+
+    // Mathematical safety check: Ensure quantitative operations strictly target numeric constraints
+    const numericColumns = ['amount']; // Expand this as schema scales
+    if ((query.aggregate === 'SUM' || query.aggregate === 'AVG') && !numericColumns.includes(query.column)) {
+        return { valid: false, error: `${query.aggregate} aggregate strongly requires a numeric data column type. '${query.column}' is not strictly numeric.` };
+    }
     if (query.filter !== undefined) {
         for (const f of query.filter) {
             if (!allowedColumns.includes(f.column)) {

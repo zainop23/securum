@@ -20,8 +20,9 @@ const router = Router();
  */
 export const pendingCommitments = new Map<
   string,
-  { noisyResult: NoisyResult; nonce: string }
+  { noisyResult: NoisyResult; nonce: string; resultStr: string }
 >();
+const inFlightCommitments = new Set<string>();
 
 // Load schema map once at module load (same path as index.ts)
 let schemaMap: ReturnType<typeof loadAndValidateSchemaMap>;
@@ -78,11 +79,14 @@ router.post('/commit', async (req, res) => {
   }
 
   // --- Reject duplicate commits for the same queryId ---
-  if (pendingCommitments.has(queryId)) {
+  if (pendingCommitments.has(queryId) || inFlightCommitments.has(queryId)) {
     console.warn(`Duplicate /commit for queryId ${queryId} — rejecting`);
-    res.status(409).json({ error: 'Commitment already exists for this queryId', code: 'COMMITMENT_FAILED' });
+    res.status(409).json({ error: 'Commitment already exists or is processing for this queryId', code: 'COMMITMENT_FAILED' });
     return;
   }
+
+  // Mark as processing
+  inFlightCommitments.add(queryId);
 
   try {
     // --- Build a full QueryDefinition ---
@@ -110,14 +114,15 @@ router.post('/commit', async (req, res) => {
     const nonce = crypto.randomBytes(32).toString('hex');
 
     // --- Step 6: Compute commitment hash ---
+    const resultStr = JSON.stringify(noisyResult);
     const commitmentHash = computeCommitment(
-      JSON.stringify(noisyResult),
+      resultStr,
       nonce,
       queryId
     );
 
     // --- Step 7: Store in memory (retrieved during /reveal) ---
-    pendingCommitments.set(queryId, { noisyResult, nonce });
+    pendingCommitments.set(queryId, { noisyResult, nonce, resultStr });
 
     console.log(`[${config.orgName}] Committed queryId=${queryId} hash=${commitmentHash.slice(0, 12)}...`);
 
@@ -126,6 +131,8 @@ router.post('/commit', async (req, res) => {
   } catch (err) {
     console.error(`Unexpected error during /commit for queryId=${queryId}:`, (err as Error).message);
     res.status(500).json({ error: 'Commitment computation failed', code: 'COMMITMENT_FAILED' });
+  } finally {
+    inFlightCommitments.delete(queryId);
   }
 });
 
