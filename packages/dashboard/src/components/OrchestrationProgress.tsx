@@ -30,8 +30,12 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
   const [events, setEvents] = useState<ProgressEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [completionDelayActive, setCompletionDelayActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const completionTimerRef = useRef<number | null>(null);
+
+  const orchestrationSteps = ['budget_check', 'commit_broadcast', 'reveal_verify', 'aggregation', 'finalize', 'complete'];
 
   useEffect(() => {
     const token = localStorage.getItem('securum_token');
@@ -50,16 +54,62 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
         const event: ProgressEvent = JSON.parse(e.data);
         if (event.step === 'connected') return;
 
-        setEvents((prev) => [...prev, event]);
+        setEvents((prev) => {
+          const nextEvents = [...prev];
 
-        if (event.step === 'complete') {
-          setTimeout(() => {
-            es.close();
-            onComplete();
-          }, 800);
-        }
+          if (event.step === 'complete' && event.status === 'done') {
+            // When a terminal complete arrives, ensure every checklist step has a done state.
+            // This handles late subscribers and steps that were only seen as running.
+            const latestStatuses = new Map<string, 'running' | 'done' | 'error'>();
+            for (const ev of prev) {
+              latestStatuses.set(ev.step, ev.status);
+            }
+
+            for (const step of orchestrationSteps) {
+              if (step === 'complete') {
+                continue;
+              }
+              if (latestStatuses.get(step) === 'done') {
+                continue;
+              }
+              nextEvents.push({
+                step,
+                status: 'done',
+                message: `${STEP_ICONS[step]?.label ?? step} complete`,
+                timestamp: event.timestamp,
+              });
+            }
+          }
+
+          nextEvents.push(event);
+
+          if (event.step === 'complete' && event.status === 'done') {
+            const nextStatuses = new Map<string, 'running' | 'done' | 'error'>();
+            for (const ev of nextEvents) {
+              nextStatuses.set(ev.step, ev.status);
+            }
+
+            const allStepsTicked = orchestrationSteps.every((step) => nextStatuses.get(step) === 'done');
+            if (allStepsTicked && completionTimerRef.current === null) {
+              setCompletionDelayActive(true);
+              completionTimerRef.current = window.setTimeout(() => {
+                completionTimerRef.current = null;
+                setCompletionDelayActive(false);
+                es.close();
+                onComplete();
+              }, 2000);
+            }
+          }
+
+          return nextEvents;
+        });
 
         if (event.status === 'error') {
+          if (completionTimerRef.current !== null) {
+            window.clearTimeout(completionTimerRef.current);
+            completionTimerRef.current = null;
+            setCompletionDelayActive(false);
+          }
           es.close();
           onError(event.detail || event.message);
         }
@@ -78,6 +128,11 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
 
     return () => {
       es.close();
+      if (completionTimerRef.current !== null) {
+        window.clearTimeout(completionTimerRef.current);
+        completionTimerRef.current = null;
+        setCompletionDelayActive(false);
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryId]);
@@ -90,6 +145,11 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
 
   const handleCancel = async () => {
     setCancelling(true);
+    if (completionTimerRef.current !== null) {
+      window.clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+      setCompletionDelayActive(false);
+    }
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
@@ -144,8 +204,8 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
   const hasErrored = Array.from(stepStatuses.values()).includes('error');
   const isFinished = hasCompleted || hasErrored;
 
-  const totalSteps = 5;
-  const completedSteps = ['budget_check', 'commit_broadcast', 'reveal_verify', 'aggregation', 'finalize']
+  const totalSteps = orchestrationSteps.length;
+  const completedSteps = orchestrationSteps
     .filter(s => stepStatuses.get(s) === 'done').length;
   const progressPct = hasCompleted ? 100 : Math.round((completedSteps / totalSteps) * 100);
 
@@ -171,7 +231,7 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {!isFinished && !cancelling && onCancel && (
+          {(!isFinished || completionDelayActive) && !cancelling && onCancel && (
             <button
               onClick={handleCancel}
               style={{

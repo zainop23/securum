@@ -41,6 +41,15 @@ const CHART_COLORS = [
   '#F87171', // rose
 ];
 
+const COMPLETED_EXECUTION_STEPS = [
+  'Privacy Budget',
+  'Commit Phase',
+  'Reveal & Verify',
+  'Aggregation',
+  'Finalization',
+  'Complete',
+];
+
 export default function ResultPage() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<ResultData | null>(null);
@@ -293,6 +302,32 @@ export default function ResultPage() {
           </div>
         </div>
       )}
+
+      {/* Completed Execution Checklist */}
+      <div className="glass-card-static animate-slide-up" style={{ padding: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#F8FAFC', marginBottom: '1rem' }}>Execution Checklist</h2>
+        <div style={{ display: 'grid', gap: '0.55rem' }}>
+          {COMPLETED_EXECUTION_STEPS.map((step) => (
+            <div
+              key={step}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.5rem 0.75rem',
+                borderRadius: 10,
+                background: 'rgba(20,184,166,0.08)',
+                border: '1px solid rgba(20,184,166,0.2)',
+              }}
+            >
+              <span style={{ fontSize: '0.85rem', color: '#CBD5E1' }}>{step}</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#14B8A6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Action */}
       <div className="flex gap-4 flex-wrap">

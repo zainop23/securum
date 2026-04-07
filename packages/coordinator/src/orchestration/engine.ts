@@ -468,6 +468,8 @@ async function _runPipeline(
       );
     }
 
+    emitProgress(queryId, 'finalize', 'done', 'Finalization complete');
+
     // ---- Done ----
     await updateQueryStatus(dbPool, queryId, 'done');
     await logAuditEvent(dbPool, queryId, null, 'QUERY_DONE', {

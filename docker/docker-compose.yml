@@ -165,8 +165,13 @@ services:
       dockerfile: docker/dashboard.Dockerfile
     environment:
       VITE_API_URL: http://localhost:4000
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
     ports:
       - "3000:3000"
+    volumes:
+      - ../packages/dashboard:/app/packages/dashboard
+      - /app/packages/dashboard/node_modules
     depends_on:
       coordinator:
         condition: service_healthy
