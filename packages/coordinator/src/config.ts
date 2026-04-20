@@ -7,6 +7,8 @@ interface AppConfig {
   maxEpsilonPerOrg: number;
   analystUser: string;
   analystPassword: string;
+  adminEmail: string;
+  adminPassword: string;
 }
 
 function requireEnv(name: string): string {
@@ -15,6 +17,10 @@ function requireEnv(name: string): string {
     throw new Error(`${name} env var is required`);
   }
   return value;
+}
+
+function optionalEnv(name: string, fallback: string): string {
+  return process.env[name] || fallback;
 }
 
 function parseNumberEnv(name: string, rawValue: string, fallback: number): number {
@@ -32,8 +38,10 @@ export const config: AppConfig = {
   quorumMin: parseNumberEnv('QUORUM_MIN', process.env.QUORUM_MIN || '', 2),
   defaultEpsilon: parseNumberEnv('DEFAULT_EPSILON', process.env.DEFAULT_EPSILON || '', 1.0),
   maxEpsilonPerOrg: parseNumberEnv('MAX_EPSILON_PER_ORG', process.env.MAX_EPSILON_PER_ORG || '', 10.0),
-  analystUser: requireEnv('ANALYST_USER'),
-  analystPassword: requireEnv('ANALYST_PASSWORD'),
+  analystUser: optionalEnv('ANALYST_USER', ''),
+  analystPassword: optionalEnv('ANALYST_PASSWORD', ''),
+  adminEmail: optionalEnv('ADMIN_EMAIL', 'admin@securum.dev'),
+  adminPassword: optionalEnv('ADMIN_PASSWORD', 'admin123'),
 };
 
 if (!Number.isInteger(config.port) || config.port <= 0) {

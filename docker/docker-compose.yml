@@ -31,7 +31,9 @@ services:
       ANALYST_PASSWORD: analyst123
       QUORUM_MIN: 2
       DEFAULT_EPSILON: 1.0
-      MAX_EPSILON_PER_ORG: 99999.0
+      MAX_EPSILON_PER_ORG: 999999.0
+      ADMIN_EMAIL: admin@securum.dev
+      ADMIN_PASSWORD: admin123
     ports:
       - "4000:4000"
     depends_on:
@@ -104,7 +106,7 @@ services:
     environment:
       PORT: 5001
       DATABASE_URL: postgresql://securum:securum@postgres-org1:5432/org1_db
-      ORG_NAME: hospital-alpha
+      ORG_NAME: Amazon
       SCHEMA_MAP_PATH: packages/org-node/config/schema-map-org1.json
       SUM_SENSITIVITY: 500
       DEFAULT_EPSILON: 1.0
@@ -125,7 +127,7 @@ services:
     environment:
       PORT: 5002
       DATABASE_URL: postgresql://securum:securum@postgres-org2:5432/org2_db
-      ORG_NAME: hospital-beta
+      ORG_NAME: Flipkart
       SCHEMA_MAP_PATH: packages/org-node/config/schema-map-org2.json
       SUM_SENSITIVITY: 500
       DEFAULT_EPSILON: 1.0
@@ -146,7 +148,7 @@ services:
     environment:
       PORT: 5003
       DATABASE_URL: postgresql://securum:securum@postgres-org3:5432/org3_db
-      ORG_NAME: hospital-gamma
+      ORG_NAME: Myntra
       SCHEMA_MAP_PATH: packages/org-node/config/schema-map-org3.json
       SUM_SENSITIVITY: 500
       DEFAULT_EPSILON: 1.0

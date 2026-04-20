@@ -338,24 +338,44 @@ export async function runOrchestration(
   queryDefinition: QueryDefinition,
   epsilon: number
 ): Promise<OrchestrationResult> {
-  // Wrap the entire pipeline in a timeout
-  return Promise.race([
-    _runPipeline(dbPool, queryId, queryDefinition, epsilon),
-    new Promise<OrchestrationFailure>((resolve) =>
-      setTimeout(async () => {
-        await updateQueryStatus(dbPool, queryId, 'failed').catch(() => {});
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<OrchestrationFailure>((resolve) => {
+    timeoutHandle = setTimeout(async () => {
+      const timeoutUpdate = await dbPool.query(
+        `UPDATE queries
+         SET status = 'failed'
+         WHERE id = $1
+           AND status IN ('pending', 'committing', 'revealing')
+         RETURNING id`,
+        [queryId]
+      ).catch(() => null);
+
+      if (timeoutUpdate && timeoutUpdate.rowCount === 1) {
         await logAuditEvent(dbPool, queryId, null, 'QUERY_FAILED', {
           error: 'Pipeline timeout',
         }).catch(() => {});
-        resolve({
-          ok: false,
-          queryId,
-          status: 'failed',
-          error: 'Pipeline timeout — exceeded 60 seconds',
-        });
-      }, PIPELINE_TIMEOUT_MS)
-    ),
-  ]);
+      }
+
+      resolve({
+        ok: false,
+        queryId,
+        status: 'failed',
+        error: 'Pipeline timeout — exceeded 60 seconds',
+      });
+    }, PIPELINE_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      _runPipeline(dbPool, queryId, queryDefinition, epsilon),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeoutHandle !== null) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }
 
 async function _runPipeline(

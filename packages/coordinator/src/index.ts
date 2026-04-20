@@ -1,46 +1,34 @@
 import express from 'express';
 import cors from 'cors';
-import jwt from 'jsonwebtoken';
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import { validateAndBuildQuery, QueryDefinition } from '@securum/shared';
 import { runOrchestration } from './orchestration/engine';
 import { getQueryEmitter, ProgressEvent } from './orchestration/engine';
 import { config } from './config';
 import { pool } from './db';
 
+// Auth & middleware
+import {
+  requireJwt,
+  requireOrgApiKey,
+  asyncHandler,
+  sendError,
+  AuthenticatedRequest,
+} from './auth/rbac';
+
+// Route modules
+import { authRouter } from './routes/auth';
+import { onboardingRouter } from './routes/onboarding';
+import { orgsRouter } from './routes/orgs';
+import { adminRouter } from './routes/admin';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-type ErrorCode =
-  | 'INVALID_QUERY'
-  | 'SCHEMA_MISMATCH'
-  | 'DB_ERROR'
-  | 'TIMEOUT'
-  | 'COMMITMENT_FAILED'
-  | 'QUORUM_NOT_MET'
-  | 'UNAUTHORIZED';
-
-type JwtClaims = {
-  sub: string;
-  role: 'analyst';
-};
-
-type AuthenticatedRequest = express.Request & {
-  user?: JwtClaims;
-  org?: {
-    id: string;
-    name: string;
-  };
-};
-
-function sendError(res: express.Response, status: number, error: string, code: ErrorCode): void {
-  res.status(status).json({ error, code });
-}
-
-function hashApiKey(apiKey: string): string {
-  return createHash('sha256').update(apiKey).digest('hex');
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 async function logAuditEvent(
   queryId: string | null,
@@ -55,66 +43,9 @@ async function logAuditEvent(
   );
 }
 
-const asyncHandler =
-  (handler: (req: express.Request, res: express.Response, next: express.NextFunction) => Promise<void>) =>
-  (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
-
-function requireJwt(req: express.Request, res: express.Response, next: express.NextFunction): void {
-  let token = '';
-
-  const authHeader = req.header('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.slice('Bearer '.length).trim();
-  } else if (req.query.token && typeof req.query.token === 'string') {
-    token = req.query.token;
-  }
-
-  if (!token) {
-    sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
-    return;
-  }
-
-  try {
-    const decoded = jwt.verify(token, config.jwtSecret) as JwtClaims;
-    if (!decoded?.sub || decoded.role !== 'analyst') {
-      sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
-      return;
-    }
-
-    (req as AuthenticatedRequest).user = decoded;
-    next();
-  } catch {
-    sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
-  }
-}
-
-const requireOrgApiKey = asyncHandler(async (req, res, next) => {
-  const apiKey = req.header('x-org-api-key');
-  if (!apiKey) {
-    sendError(res, 401, 'Invalid API key', 'UNAUTHORIZED');
-    return;
-  }
-
-  const keyHash = hashApiKey(apiKey);
-  const orgResult = await pool.query(
-    `SELECT id, name
-     FROM organizations
-     WHERE api_key_hash = $1 AND status = 'active'
-     LIMIT 1`,
-    [keyHash]
-  );
-
-  if (orgResult.rowCount !== 1) {
-    sendError(res, 401, 'Invalid API key', 'UNAUTHORIZED');
-    return;
-  }
-
-  const org = orgResult.rows[0] as { id: string; name: string };
-  (req as AuthenticatedRequest).org = org;
-  next();
-});
+// ---------------------------------------------------------------------------
+// Health Check
+// ---------------------------------------------------------------------------
 
 app.get('/health', async (_req, res) => {
   try {
@@ -125,24 +56,62 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-app.post('/auth/login', (req, res) => {
-  const { username, password } = req.body as { username?: string; password?: string };
-  if (username !== config.analystUser || password !== config.analystPassword) {
-    sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
-    return;
-  }
+// ---------------------------------------------------------------------------
+// Mount Route Modules
+// ---------------------------------------------------------------------------
 
-  const token = jwt.sign({ sub: username, role: 'analyst' }, config.jwtSecret, {
-    expiresIn: '8h',
-  });
+app.use('/auth', authRouter);
+app.use('/onboarding', onboardingRouter);
+app.use('/orgs', orgsRouter);
+app.use('/admin', adminRouter);
 
-  res.json({ token });
-});
+// ---------------------------------------------------------------------------
+// Legacy: GET /orgs (list all orgs — kept for backward compat)
+// Now requires auth but shows all orgs for platform_admin, own org for others
+// ---------------------------------------------------------------------------
+
+app.get(
+  '/orgs-list',
+  requireJwt,
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthenticatedRequest).user!;
+
+    let orgsResult;
+    if (user.role === 'platform_admin') {
+      orgsResult = await pool.query(
+        `SELECT id, name, endpoint_url, status, created_at
+         FROM organizations
+         ORDER BY created_at DESC`
+      );
+    } else {
+      orgsResult = await pool.query(
+        `SELECT id, name, endpoint_url, status, created_at
+         FROM organizations
+         WHERE id = $1`,
+        [user.orgId]
+      );
+    }
+
+    res.json({ orgs: orgsResult.rows });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Legacy: POST /orgs/register (kept for backward compat with existing scripts)
+// Now only platform_admin can use this
+// ---------------------------------------------------------------------------
 
 app.post(
   '/orgs/register',
   requireJwt,
   asyncHandler(async (req, res) => {
+    const user = (req as AuthenticatedRequest).user!;
+
+    if (user.role !== 'platform_admin') {
+      sendError(res, 403, 'Only platform admins can register orgs directly', 'FORBIDDEN');
+      return;
+    }
+
     const { name, endpointUrl } = req.body as { name?: string; endpointUrl?: string };
     if (!name || !endpointUrl) {
       sendError(res, 400, 'name and endpointUrl are required', 'INVALID_QUERY');
@@ -150,47 +119,40 @@ app.post(
     }
 
     const orgId = randomUUID();
+    const { randomBytes } = await import('crypto');
     const apiKey = randomBytes(32).toString('hex');
+    const { hashApiKey } = await import('./auth/rbac');
     const apiKeyHash = hashApiKey(apiKey);
 
     await pool.query(
-      `INSERT INTO organizations (id, name, api_key_hash, endpoint_url, status)
-       VALUES ($1, $2, $3, $4, 'active')`,
+      `INSERT INTO organizations (id, name, api_key_hash, endpoint_url, status, onboarding_step)
+       VALUES ($1, $2, $3, $4, 'active', 'onboarding_complete')`,
       [orgId, name, apiKeyHash, endpointUrl]
     );
 
     await logAuditEvent(null, orgId, 'ORG_REGISTERED', {
       name,
       endpointUrl,
-      registeredBy: (req as AuthenticatedRequest).user?.sub,
+      registeredBy: user.sub,
     });
 
     res.status(201).json({ orgId, apiKey });
   })
 );
 
-app.get(
-  '/orgs',
-  requireJwt,
-  asyncHandler(async (_req, res) => {
-    const orgsResult = await pool.query(
-      `SELECT id, name, endpoint_url, status, created_at
-       FROM organizations
-       ORDER BY created_at DESC`
-    );
-
-    res.json({ orgs: orgsResult.rows });
-  })
-);
+// ---------------------------------------------------------------------------
+// POST /query — submit query (org-scoped)
+// ---------------------------------------------------------------------------
 
 app.post(
   '/query',
   requireJwt,
   asyncHandler(async (req, res) => {
     const body = req.body as Partial<QueryDefinition> & { epsilon?: number };
-    const submitter = (req as AuthenticatedRequest).user?.sub;
-    if (!submitter) {
-      sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
+    const user = (req as AuthenticatedRequest).user!;
+
+    if (user.role !== 'platform_admin' && user.role !== 'org_admin' && user.role !== 'analyst') {
+      sendError(res, 403, 'Insufficient permissions', 'FORBIDDEN');
       return;
     }
 
@@ -199,7 +161,7 @@ app.post(
       column: String(body.column ?? ''),
       filter: body.filter,
       grouping: body.grouping,
-      submitter,
+      submitter: user.email || user.sub,
     };
 
     const parsed = validateAndBuildQuery(def);
@@ -221,47 +183,42 @@ app.post(
 
     const queryId = randomUUID();
     await pool.query(
-      `INSERT INTO queries (id, submitted_by, query_definition, status, quorum, epsilon)
-       VALUES ($1, $2, $3::jsonb, 'pending', $4, $5)`,
-      [queryId, submitter, JSON.stringify(def), config.quorumMin, epsilon]
+      `INSERT INTO queries (id, submitted_by, query_definition, status, quorum, epsilon, org_id)
+       VALUES ($1, $2, $3::jsonb, 'pending', $4, $5, $6)`,
+      [queryId, user.email || user.sub, JSON.stringify(def), config.quorumMin, epsilon, user.orgId]
     );
 
-    await logAuditEvent(queryId, null, 'QUERY_SUBMITTED', { submittedBy: submitter });
+    await logAuditEvent(queryId, user.orgId, 'QUERY_SUBMITTED', { submittedBy: user.email || user.sub });
 
-    // Return queryId immediately so the frontend can subscribe to SSE
-    // before orchestration progresses. Orchestration runs in the background.
     res.status(202).json({ queryId, status: 'processing' });
 
-    // Fire-and-forget: run orchestration in background
-    // The frontend will track progress via GET /query/:queryId/events (SSE)
-    // and fetch the final result from GET /results/:queryId
     runOrchestration(pool, queryId, def, epsilon).catch((err) => {
       console.error(`[orchestration] Background failure for ${queryId}:`, err);
     });
   })
 );
 
-// ── SSE: stream real-time orchestration progress ──
+// ---------------------------------------------------------------------------
+// SSE: stream real-time orchestration progress
+// ---------------------------------------------------------------------------
+
 app.get(
   '/query/:queryId/events',
   requireJwt,
   (req: express.Request<{ queryId: string }>, res) => {
     const { queryId } = req.params;
 
-    // SSE headers
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // disable nginx buffering
+      'X-Accel-Buffering': 'no',
     });
 
-    // Send an initial connected event
     res.write(`data: ${JSON.stringify({ step: 'connected', status: 'done', message: 'Connected to query progress stream', timestamp: Date.now() })}\n\n`);
 
     const emitter = getQueryEmitter(queryId);
     if (!emitter) {
-      // Query already finished or doesn't exist — send a done event and close
       res.write(`data: ${JSON.stringify({ step: 'complete', status: 'done', message: 'Query already completed', timestamp: Date.now() })}\n\n`);
       res.end();
       return;
@@ -270,7 +227,6 @@ app.get(
     const onProgress = (event: ProgressEvent) => {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
 
-      // Close after terminal events
       if (event.step === 'complete' || event.step === 'error') {
         setTimeout(() => res.end(), 200);
       }
@@ -278,12 +234,10 @@ app.get(
 
     emitter.on('progress', onProgress);
 
-    // Heartbeat every 15s to keep the connection alive
     const heartbeat = setInterval(() => {
       res.write(': heartbeat\n\n');
     }, 15_000);
 
-    // Clean up when client disconnects
     req.on('close', () => {
       emitter.removeListener('progress', onProgress);
       clearInterval(heartbeat);
@@ -291,34 +245,44 @@ app.get(
   }
 );
 
-// ── Cancel ongoing query ──
+// ---------------------------------------------------------------------------
+// Cancel ongoing query
+// ---------------------------------------------------------------------------
+
 app.post(
   '/query/:queryId/cancel',
   requireJwt,
   asyncHandler(async (req, res) => {
     const queryId = req.params.queryId as string;
-    const submitter = (req as AuthenticatedRequest).user?.sub;
-    
-    const result = await pool.query(
-      `SELECT status FROM queries WHERE id = $1 AND submitted_by = $2`,
-      [queryId, submitter]
-    );
+    const user = (req as AuthenticatedRequest).user!;
 
-    if (result.rowCount === 0) {
+    // Check query exists and belongs to the user's org (or user is admin)
+    let queryCheck;
+    if (user.role === 'platform_admin') {
+      queryCheck = await pool.query(
+        `SELECT status FROM queries WHERE id = $1`,
+        [queryId]
+      );
+    } else {
+      queryCheck = await pool.query(
+        `SELECT status FROM queries WHERE id = $1 AND (submitted_by = $2 OR org_id = $3)`,
+        [queryId, user.email || user.sub, user.orgId]
+      );
+    }
+
+    if (queryCheck.rowCount === 0) {
       sendError(res, 404, 'Query not found', 'INVALID_QUERY');
       return;
     }
 
-    const status = result.rows[0].status;
+    const status = queryCheck.rows[0].status;
     if (status === 'done' || status === 'failed') {
       res.json({ ok: false, message: 'Query already finished or failed' });
       return;
     }
 
-    // Attempt to mark as failed
     await pool.query(`UPDATE queries SET status = 'failed' WHERE id = $1`, [queryId]);
 
-    // Emit event so anyone listening knows it's cancelled
     const emitter = getQueryEmitter(queryId);
     if (emitter) {
       emitter.emit('progress', {
@@ -334,19 +298,37 @@ app.post(
   })
 );
 
+// ---------------------------------------------------------------------------
+// GET /results/:queryId — with org scoping
+// ---------------------------------------------------------------------------
+
 app.get(
   '/results/:queryId',
   requireJwt,
   asyncHandler(async (req, res) => {
     const { queryId } = req.params;
-    const result = await pool.query(
-      `SELECT q.id AS query_id, q.status, r.global_result
-       FROM queries q
-       LEFT JOIN results r ON r.query_id = q.id
-       WHERE q.id = $1
-       LIMIT 1`,
-      [queryId]
-    );
+    const user = (req as AuthenticatedRequest).user!;
+
+    let result;
+    if (user.role === 'platform_admin') {
+      result = await pool.query(
+        `SELECT q.id AS query_id, q.status, r.global_result
+         FROM queries q
+         LEFT JOIN results r ON r.query_id = q.id
+         WHERE q.id = $1
+         LIMIT 1`,
+        [queryId]
+      );
+    } else {
+      result = await pool.query(
+        `SELECT q.id AS query_id, q.status, r.global_result
+         FROM queries q
+         LEFT JOIN results r ON r.query_id = q.id
+         WHERE q.id = $1 AND (q.org_id = $2 OR q.submitted_by = $3)
+         LIMIT 1`,
+        [queryId, user.orgId, user.email || user.sub]
+      );
+    }
 
     if (result.rowCount !== 1) {
       sendError(res, 404, 'query not found', 'INVALID_QUERY');
@@ -387,26 +369,62 @@ app.get(
   })
 );
 
+// ---------------------------------------------------------------------------
+// GET /results — list queries (org-scoped)
+// ---------------------------------------------------------------------------
+
 app.get(
   '/results',
   requireJwt,
-  asyncHandler(async (_req, res) => {
-    const result = await pool.query(
-      `SELECT id AS query_id, status, submitted_by, created_at
-       FROM queries
-       ORDER BY created_at DESC
-       LIMIT 100`
-    );
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthenticatedRequest).user!;
+
+    let result;
+    if (user.role === 'platform_admin') {
+      result = await pool.query(
+        `SELECT id AS query_id, status, submitted_by, created_at
+         FROM queries
+         ORDER BY created_at DESC
+         LIMIT 100`
+      );
+    } else {
+      result = await pool.query(
+        `SELECT id AS query_id, status, submitted_by, created_at
+         FROM queries
+         WHERE org_id = $1 OR submitted_by = $2
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [user.orgId, user.email || user.sub]
+      );
+    }
 
     res.json({ results: result.rows });
   })
 );
+
+// ---------------------------------------------------------------------------
+// GET /audit/:queryId — with org scoping
+// ---------------------------------------------------------------------------
 
 app.get(
   '/audit/:queryId',
   requireJwt,
   asyncHandler(async (req, res) => {
     const { queryId } = req.params;
+    const user = (req as AuthenticatedRequest).user!;
+
+    // Verify query ownership (unless platform_admin)
+    if (user.role !== 'platform_admin') {
+      const qResult = await pool.query(
+        `SELECT id FROM queries WHERE id = $1 AND (org_id = $2 OR submitted_by = $3)`,
+        [queryId, user.orgId, user.email || user.sub]
+      );
+      if (!qResult.rowCount || qResult.rowCount === 0) {
+        sendError(res, 404, 'Query not found', 'NOT_FOUND');
+        return;
+      }
+    }
+
     const auditResult = await pool.query(
       `SELECT id, query_id, org_id, event_type, payload, created_at
        FROM audit_logs
@@ -418,6 +436,10 @@ app.get(
     res.json({ queryId, events: auditResult.rows });
   })
 );
+
+// ---------------------------------------------------------------------------
+// Org-node self-identification (API key auth)
+// ---------------------------------------------------------------------------
 
 app.get(
   '/org/me',
@@ -433,10 +455,18 @@ app.get(
   })
 );
 
+// ---------------------------------------------------------------------------
+// Global error handler
+// ---------------------------------------------------------------------------
+
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
   sendError(res, 500, 'Internal server error', 'DB_ERROR');
 });
+
+// ---------------------------------------------------------------------------
+// Start Server
+// ---------------------------------------------------------------------------
 
 app.listen(config.port, () => {
   const maskedUrl = config.databaseUrl.replace(/\/\/.*@/, '//***@');

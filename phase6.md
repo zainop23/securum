@@ -1,7 +1,7 @@
 # Phase 6 — SaaS Platform: Organization Registration, Onboarding & Full Workflow *(Both)*
 
 > **Owners:** Zain (backend, DB, auth) + Rahul (frontend, UX flows)
-> **Effort estimate:** 5–7 days
+> **Effort estimate:** 3–4 days
 > **Depends on:** Phase 5 (dashboard is functional, full commit–reveal pipeline works end-to-end)
 > **Milestone:** Securum is a proper multi-tenant SaaS platform. Organizations can self-register, onboard their nodes, manage their teams, and go through a complete lifecycle — from sign-up to running privacy-preserving queries. An admin panel provides platform-wide oversight.
 
@@ -37,8 +37,8 @@ This phase transforms Securum into a proper SaaS platform with a complete user j
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              Coordinator API (Express)                 │   │
 │  │                                                        │   │
-│  │  /auth/*          - Login, Register, Password Reset    │   │
-│  │  /orgs/*          - Org CRUD, Onboarding, Settings     │   │
+│  │  /auth/*          - Login, Register                    │   │
+│  │  /orgs/*          - Org CRUD, Settings                 │   │
 │  │  /orgs/:id/users  - Org Member Management              │   │
 │  │  /query           - Submit Queries (role-gated)        │   │
 │  │  /results/*       - View Results (role-gated)          │   │
@@ -71,13 +71,11 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     role VARCHAR(30) NOT NULL DEFAULT 'analyst'
-        CHECK (role IN ('platform_admin', 'org_admin', 'analyst', 'viewer')),
+        CHECK (role IN ('platform_admin', 'org_admin', 'analyst')),
     org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
     is_active BOOLEAN DEFAULT true,
-    email_verified BOOLEAN DEFAULT false,
     last_login_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 /* ── Org Invitations: for team invites ── */
@@ -86,69 +84,11 @@ CREATE TABLE org_invitations (
     org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL,
     role VARCHAR(30) NOT NULL DEFAULT 'analyst'
-        CHECK (role IN ('org_admin', 'analyst', 'viewer')),
+        CHECK (role IN ('org_admin', 'analyst')),
     invited_by UUID NOT NULL REFERENCES users(id),
     token VARCHAR(255) UNIQUE NOT NULL,
     status VARCHAR(20) DEFAULT 'pending'
-        CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-/* ── Org Settings: configurable per-org settings ── */
-CREATE TABLE org_settings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    privacy_budget_limit NUMERIC(10,4) DEFAULT 10.0,
-    max_epsilon_per_query NUMERIC(10,4) DEFAULT 5.0,
-    auto_approve_queries BOOLEAN DEFAULT false,
-    notification_email VARCHAR(255),
-    schema_map JSONB,                          -- stored schema map (uploaded during onboarding)
-    node_endpoint_verified BOOLEAN DEFAULT false,
-    onboarding_completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-/* ── Onboarding Steps Tracker ── */
-CREATE TABLE onboarding_progress (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    step VARCHAR(50) NOT NULL
-        CHECK (step IN (
-            'account_created',
-            'org_details_filled',
-            'node_endpoint_configured',
-            'schema_map_uploaded',
-            'connectivity_verified',
-            'first_query_run',
-            'onboarding_complete'
-        )),
-    completed_at TIMESTAMPTZ DEFAULT NOW(),
-    metadata JSONB,
-    UNIQUE(org_id, step)
-);
-
-/* ── API Keys table: support multiple keys per org ── */
-CREATE TABLE api_keys (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    key_hash VARCHAR(255) NOT NULL,
-    key_prefix VARCHAR(8) NOT NULL,         -- first 8 chars for identification (e.g., "sk_live_ab")
-    permissions JSONB DEFAULT '["execute_queries"]'::jsonb,
-    last_used_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ,
-    is_active BOOLEAN DEFAULT true,
-    created_by UUID REFERENCES users(id),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-/* ── Session / Refresh Tokens (optional, for token rotation) ── */
-CREATE TABLE refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash VARCHAR(255) UNIQUE NOT NULL,
+        CHECK (status IN ('pending', 'accepted', 'expired')),
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -158,10 +98,6 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_org ON users(org_id);
 CREATE INDEX idx_org_invitations_token ON org_invitations(token);
 CREATE INDEX idx_org_invitations_org ON org_invitations(org_id);
-CREATE INDEX idx_api_keys_hash ON api_keys(key_hash);
-CREATE INDEX idx_api_keys_org ON api_keys(org_id);
-CREATE INDEX idx_onboarding_org ON onboarding_progress(org_id);
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 ```
 
 ### Modify Existing Tables
@@ -169,15 +105,32 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 ```sql
 /* Add columns to organizations */
 ALTER TABLE organizations ADD COLUMN description TEXT;
-ALTER TABLE organizations ADD COLUMN logo_url VARCHAR(512);
-ALTER TABLE organizations ADD COLUMN plan VARCHAR(30) DEFAULT 'free'
-    CHECK (plan IN ('free', 'starter', 'professional', 'enterprise'));
-ALTER TABLE organizations ADD COLUMN max_users INTEGER DEFAULT 5;
+ALTER TABLE organizations ADD COLUMN onboarding_step VARCHAR(50) DEFAULT 'account_created'
+    CHECK (onboarding_step IN (
+        'account_created',
+        'node_endpoint_configured',
+        'schema_map_uploaded',
+        'connectivity_verified',
+        'onboarding_complete'
+    ));
+ALTER TABLE organizations ADD COLUMN schema_map JSONB;
+ALTER TABLE organizations ADD COLUMN privacy_budget_limit NUMERIC(10,4) DEFAULT 10.0;
+ALTER TABLE organizations ADD COLUMN max_epsilon_per_query NUMERIC(10,4) DEFAULT 5.0;
 ALTER TABLE organizations ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
 
 /* Add org_id to queries for multi-tenant scoping */
 ALTER TABLE queries ADD COLUMN org_id UUID REFERENCES organizations(id);
 ```
+
+> **What was removed vs. the original plan:**
+> - **`org_settings` table** — merged into `organizations` (privacy limits, schema_map). No need for a separate table when it's always 1:1.
+> - **`onboarding_progress` table** — replaced with a single `onboarding_step` column on `organizations`. A linear wizard doesn't need a separate row per step.
+> - **`api_keys` table** — orgs already have `api_key_hash` on the `organizations` table. One key per org is sufficient for now.
+> - **`refresh_tokens` table** — JWT-only auth is fine for this stage. No token rotation needed.
+> - **`logo_url`** column — cosmetic, not needed for functionality.
+> - **`plan` / `max_users`** columns — no billing/plan system to enforce these. Premature.
+> - **`email_verified`** column on users — we're auto-verifying in dev anyway, no email service.
+> - **`viewer` role** — 3 roles (platform_admin, org_admin, analyst) cover all real use cases. Viewers can just be analysts who don't submit queries.
 
 > **Migration note:** Since `docker-entrypoint-initdb.d` only runs on first volume creation, add these as ALTER statements in a separate migration file `docker/postgres-init/002-phase6-migration.sql`, OR blow away volumes with `docker compose down -v` and add everything to the original `init.sql`.
 
@@ -190,24 +143,20 @@ ALTER TABLE queries ADD COLUMN org_id UUID REFERENCES organizations(id);
 ```
 1. Landing Page → "Get Started" CTA
 2. Sign-Up Form: org name, admin email, admin full name, password
-3. Email verification (simulated for demo — auto-verified in dev)
-4. Org Dashboard: Onboarding Wizard starts
-   ├─ Step 1: Fill org details (description, logo)
-   ├─ Step 2: Configure org-node endpoint URL
-   ├─ Step 3: Upload/paste schema map JSON
-   ├─ Step 4: Generate API key → shown ONCE → download as .env snippet
-   ├─ Step 5: Connectivity test (coordinator pings org-node /health)
-   └─ Step 6: Run a test query (optional)
-5. Onboarding Complete → Full Dashboard Access
+3. Org Dashboard: Onboarding Wizard starts
+   ├─ Step 1: Configure org-node endpoint URL
+   ├─ Step 2: Upload/paste schema map JSON
+   ├─ Step 3: Connectivity test (coordinator pings org-node /health)
+   └─ Step 4: Complete → Full Dashboard Access
 ```
 
 ### Flow 2: Team Member Invitation
 
 ```
 1. Org Admin → Settings → Team
-2. Invite by email + select role (analyst, viewer, org_admin)
-3. Invitee receives link (simulated — token URL shown in UI for demo)
-4. Invitee clicks link → sign-up form (pre-filled email) → joins org
+2. Invite by email + select role (analyst, org_admin)
+3. Invitation token shown in UI (simulated — no real email)
+4. Invitee visits link → sign-up form (pre-filled email) → joins org
 ```
 
 ### Flow 3: Analyst Query Workflow
@@ -225,12 +174,10 @@ ALTER TABLE queries ADD COLUMN org_id UUID REFERENCES organizations(id);
 ```
 1. Login with platform_admin role
 2. Admin Dashboard:
-   ├── All orgs overview (name, status, plan, member count, query count)
+   ├── All orgs overview (name, status, member count, query count)
    ├── All users across orgs
    ├── System-wide query metrics
-   ├── Privacy budget utilization across orgs
-   ├── Audit log viewer (global)
-   └── Org approval/suspension
+   └── Privacy budget utilization across orgs
 ```
 
 ---
@@ -253,12 +200,10 @@ Replace the hardcoded `ANALYST_USER/ANALYST_PASSWORD` with a proper user system.
 - **Flow:**
   1. Validate email format, password strength (min 8 chars, 1 uppercase, 1 number).
   2. Check email not already taken.
-  3. Create `organizations` row (name = orgName, status = 'pending').
-  4. Create `users` row (role = 'org_admin', org_id = new org, email_verified = true for dev).
-  5. Create `org_settings` row with defaults.
-  6. Create first `onboarding_progress` entry: `account_created`.
-  7. Return `{ token, user: { id, email, fullName, role, orgId } }`.
-- **Gotcha:** Wrap org + user + settings creation in a DB transaction. If user insert fails (e.g. duplicate email), the org should NOT be left orphaned.
+  3. Create `organizations` row (name = orgName, status = 'pending', onboarding_step = 'account_created').
+  4. Create `users` row (role = 'org_admin', org_id = new org).
+  5. Return `{ token, user: { id, email, fullName, role, orgId } }`.
+- **Gotcha:** Wrap org + user creation in a DB transaction. If user insert fails (e.g. duplicate email), the org should NOT be left orphaned.
 
 #### 1.3 Login Endpoint (Updated)
 - `POST /auth/login` — body: `{ email, password }`.
@@ -291,20 +236,14 @@ Replace the hardcoded `ANALYST_USER/ANALYST_PASSWORD` with a proper user system.
   ```
 - **Permission matrix:**
 
-  | Endpoint | platform_admin | org_admin | analyst | viewer |
-  |----------|:-:|:-:|:-:|:-:|
-  | `POST /query` | ✅ | ✅ | ✅ | ❌ |
-  | `GET /results/*` | ✅ | ✅ | ✅ | ✅ |
-  | `GET /orgs` | ✅ | own org | own org | own org |
-  | `POST /orgs/register` | ✅ | ❌ | ❌ | ❌ |
-  | `GET /admin/*` | ✅ | ❌ | ❌ | ❌ |
-  | Org settings | ✅ | own org | ❌ | ❌ |
-  | Invite users | ✅ | own org | ❌ | ❌ |
-
-#### 1.6 Refresh Token (Optional Enhancement)
-- On login, also return a `refreshToken` (opaque, stored hashed in `refresh_tokens`).
-- `POST /auth/refresh` — exchange refresh token for new JWT.
-- Refresh token expires in 7 days, JWT in 1 hour.
+  | Endpoint | platform_admin | org_admin | analyst |
+  |----------|:-:|:-:|:-:|
+  | `POST /query` | ✅ | ✅ | ✅ |
+  | `GET /results/*` | ✅ | ✅ | ✅ |
+  | `GET /orgs` | ✅ | own org | own org |
+  | `GET /admin/*` | ✅ | ❌ | ❌ |
+  | Org settings | ✅ | own org | ❌ |
+  | Invite users | ✅ | own org | ❌ |
 
 ---
 
@@ -313,46 +252,36 @@ Replace the hardcoded `ANALYST_USER/ANALYST_PASSWORD` with a proper user system.
 **Where:** `packages/coordinator/src/routes/onboarding.ts`
 
 #### 2.1 Onboarding Status
-- `GET /onboarding/status` — returns org's current step + completion status.
-- Reads from `onboarding_progress` joined with `org_settings`.
-- Returns: `{ orgId, steps: [{step, completedAt}], currentStep, isComplete }`.
+- `GET /onboarding/status` — returns org's current onboarding step.
+- Reads `onboarding_step` from `organizations`.
+- Returns: `{ orgId, currentStep, isComplete }`.
 
-#### 2.2 Update Org Details
-- `PUT /onboarding/org-details` — body: `{ description, logoUrl }`.
-- Updates `organizations` table.
-- Records `org_details_filled` in `onboarding_progress`.
-
-#### 2.3 Configure Node Endpoint
+#### 2.2 Configure Node Endpoint
 - `PUT /onboarding/node-endpoint` — body: `{ endpointUrl }`.
 - Validates URL format.
 - Updates `organizations.endpoint_url`.
-- Records `node_endpoint_configured`.
+- Advances `onboarding_step` to `node_endpoint_configured`.
 
-#### 2.4 Upload Schema Map
+#### 2.3 Upload Schema Map
 - `PUT /onboarding/schema-map` — body: `{ schemaMap: {...} }`.
 - Validates schema map structure: must have `tables` and `columns` keys, all `GLOBAL_SCHEMA` columns must be mapped.
-- Stores in `org_settings.schema_map`.
-- Records `schema_map_uploaded`.
+- Stores in `organizations.schema_map`.
+- Advances `onboarding_step` to `schema_map_uploaded`.
 
-#### 2.5 Generate API Key
-- `POST /onboarding/api-key` — body: `{ keyName }`.
-- Generates key: `sk_live_` + `randomBytes(32).toString('hex')`.
-- Stores hash in `api_keys` table. Stores first 8 chars as `key_prefix`.
-- Returns `{ apiKeyId, apiKey, prefix }` — **key shown once, never stored in plain text**.
-- Also records step progress.
-
-#### 2.6 Connectivity Test
+#### 2.4 Connectivity Test
 - `POST /onboarding/test-connectivity` — no body.
 - Reads org's `endpoint_url` from DB.
 - Makes `GET {endpointUrl}/health` with a 10-second timeout.
 - Returns `{ success: true/false, latencyMs, error? }`.
-- If success, updates `org_settings.node_endpoint_verified = true`, records `connectivity_verified`.
+- If success, advances `onboarding_step` to `connectivity_verified`.
 
-#### 2.7 Complete Onboarding
+#### 2.5 Complete Onboarding
 - `POST /onboarding/complete` — marks onboarding as done.
-- Checks all required steps are present.
+- Checks `onboarding_step` is `connectivity_verified`.
 - Updates org status from `pending` → `active`.
-- Sets `org_settings.onboarding_completed_at`.
+- Sets `onboarding_step` to `onboarding_complete`.
+
+> **What was removed:** Separate "org details" step (description is optional, can be edited later from settings). Separate API key generation step (org already has an `api_key_hash` — the key was generated at registration time). The whole `onboarding_progress` tracking table.
 
 ---
 
@@ -362,7 +291,7 @@ Replace the hardcoded `ANALYST_USER/ANALYST_PASSWORD` with a proper user system.
 
 #### 3.1 Org Profile
 - `GET /orgs/me` — returns full org profile for the logged-in user's org.
-- `PUT /orgs/me` — update org details (name, description, logo). Org_admin only.
+- `PUT /orgs/me` — update org details (name, description). Org_admin only.
 
 #### 3.2 Team Management
 - `GET /orgs/me/members` — list all users in the org. Org_admin only.
@@ -372,23 +301,20 @@ Replace the hardcoded `ANALYST_USER/ANALYST_PASSWORD` with a proper user system.
 
 #### 3.3 Invitation Acceptance
 - `POST /auth/accept-invite` — body: `{ token, fullName, password }`.
-- Loads invitation by token, checks not expired/revoked.
+- Loads invitation by token, checks not expired.
 - Creates user with the invited role and org.
 - Marks invitation as accepted.
 - Returns JWT + user info (auto-login).
 
-#### 3.4 API Key Management
-- `GET /orgs/me/api-keys` — list keys (id, name, prefix, lastUsed, createdAt). Never return full key.
-- `POST /orgs/me/api-keys` — generate new key. Same logic as onboarding.
-- `DELETE /orgs/me/api-keys/:keyId` — revoke a key (set `is_active = false`).
-
-#### 3.5 Privacy Budget Dashboard Data
+#### 3.4 Privacy Budget Dashboard Data
 - `GET /orgs/me/privacy-budget` — returns `{ totalBudget, spent, remaining, queryCount, history: [{queryId, epsilon, createdAt}] }`.
 - Aggregates from `privacy_budget` table.
 
-#### 3.6 Org Settings
-- `GET /orgs/me/settings` — current settings.
-- `PUT /orgs/me/settings` — update settings (privacy limits, notification email, etc.). Org_admin only.
+#### 3.5 Org Settings
+- `GET /orgs/me/settings` — current settings (privacy limits, endpoint, schema map).
+- `PUT /orgs/me/settings` — update settings (privacy limits, etc.). Org_admin only.
+
+> **What was removed:** Separate API key management endpoints (multiple keys per org). One key is enough. Org profile logo upload.
 
 ---
 
@@ -407,26 +333,19 @@ All admin routes require `platform_admin` role.
     "pendingOrgs": 2,
     "totalUsers": 45,
     "totalQueries": 234,
-    "queriesLast24h": 15,
     "totalEpsilonSpent": 87.5
   }
   ```
 
 #### 4.2 Org Management
-- `GET /admin/orgs` — paginated list of all orgs with member count, query count, status, plan.
-- `GET /admin/orgs/:orgId` — detailed org view (members, queries, budget, settings).
+- `GET /admin/orgs` — list of all orgs with member count, query count, status.
 - `PUT /admin/orgs/:orgId/status` — activate/suspend an org.
-- `PUT /admin/orgs/:orgId/plan` — change org plan (free/starter/professional/enterprise).
 
 #### 4.3 User Management
-- `GET /admin/users` — paginated list of all users across all orgs.
+- `GET /admin/users` — list of all users across all orgs.
 - `PUT /admin/users/:userId/status` — activate/deactivate a user.
 
-#### 4.4 Global Audit Log
-- `GET /admin/audit` — paginated, filterable audit log viewer. Filters: `orgId`, `eventType`, `dateRange`.
-
-#### 4.5 System Health
-- `GET /admin/health` — checks coordinator DB, attempts to ping all active org-nodes. Returns per-org health status.
+> **What was removed:** Detailed single-org admin view (admin can use the regular org endpoints). Plan management (no billing system). Audit log viewer endpoint (audit_logs table already exists and is populated — a dedicated viewer can come later). System health endpoint (nice-to-have, not core).
 
 ---
 
@@ -439,7 +358,6 @@ All admin routes require `platform_admin` role.
 - **Hero section:** Headline + sub-headline + "Get Started" / "Sign In" CTAs.
 - **Feature cards:** Privacy-preserving analytics, Differential Privacy, Commit-Reveal Protocol, Self-hosted.
 - **How it works:** 3-step visual (Register → Connect → Query).
-- **Footer:** Links, copyright.
 - Use modern design: gradient backgrounds, glassmorphism cards, subtle animations.
 - **Gotcha:** This replaces the current Home page at `/`. The authenticated home moves to `/dashboard`.
 
@@ -452,7 +370,6 @@ All admin routes require `platform_admin` role.
 #### 5.3 Login Page Update (`/login`)
 - Update login to use email + password (not username).
 - Add "Don't have an account? Sign up" link.
-- Add "Forgot password?" link (can be a placeholder for now).
 
 #### 5.4 Invitation Accept Page (`/invite/:token`)
 - Public page.
@@ -468,14 +385,11 @@ All admin routes require `platform_admin` role.
 
 #### 6.1 Wizard Component
 - Multi-step wizard with progress indicator (stepper UI).
-- Steps correspond to the onboarding API:
-  1. **Welcome** — Explain what Securum does, show architecture diagram.
-  2. **Org Details** — Name (pre-filled), description, optional logo URL.
-  3. **Node Setup** — Enter endpoint URL. Explain Docker deployment. Show example docker run command.
-  4. **Schema Map** — JSON editor/textarea. Provide example schema map. Validate on paste.
-  5. **API Key** — Generate button → show key with copy-to-clipboard. Warning: "Save this key, it won't be shown again." Show `.env` snippet.
-  6. **Connectivity Test** — Big "Test Connection" button. Animated check/cross result. Retry option.
-  7. **Complete** — 🎉 Celebration animation. "Go to Dashboard" CTA.
+- Steps:
+  1. **Node Setup** — Enter endpoint URL. Explain Docker deployment. Show example docker run command.
+  2. **Schema Map** — JSON editor/textarea. Provide example schema map. Validate on paste.
+  3. **Connectivity Test** — Big "Test Connection" button. Animated check/cross result. Retry option.
+  4. **Complete** — 🎉 Celebration animation. "Go to Dashboard" CTA.
 
 #### 6.2 State Management
 - Persist wizard state by fetching `GET /onboarding/status` on load.
@@ -509,17 +423,14 @@ All admin routes require `platform_admin` role.
 /dashboard/team    → Team Management (auth, org_admin)
 /dashboard/budget  → Privacy Budget (auth)
 /admin             → Admin Dashboard (auth, platform_admin)
-/admin/orgs        → All Orgs (auth, platform_admin)
-/admin/users       → All Users (auth, platform_admin)
-/admin/audit       → Audit Log (auth, platform_admin)
 ```
 
 #### 7.2 Updated Layout Component
 - Sidebar navigation with sections:
   - **Analytics:** Dashboard, Query, History
-  - **Organization:** Settings, Team, Budget, API Keys
-  - **Admin** (if platform_admin): Orgs, Users, Audit
-- Show org name + user avatar/initials in sidebar header.
+  - **Organization:** Settings, Team, Budget
+  - **Admin** (if platform_admin): Overview, Orgs, Users
+- Show org name + user initials in sidebar header.
 - Collapse on mobile to hamburger menu.
 
 #### 7.3 Org Settings Page (`/dashboard/settings`)
@@ -527,29 +438,21 @@ All admin routes require `platform_admin` role.
 - Privacy settings (budget limit, max epsilon per query).
 - Node endpoint URL + re-test connectivity button.
 - Schema map viewer/editor.
-- Danger zone: "Leave Organization" / "Delete Organization".
 
 #### 7.4 Team Management Page (`/dashboard/team`)
 - Member table: Name, Email, Role, Last Login, Actions.
 - Invite form (slide-over/modal): Email + Role picker.
-- Show pending invitations with ability to revoke.
+- Show pending invitations.
 - Role change dropdown (org_admin only).
 
 #### 7.5 Privacy Budget Page (`/dashboard/budget`)
-- **Visual budget meter:** Circular gauge or horizontal progress bar showing used/remaining.
+- **Visual budget meter:** Progress bar showing used/remaining.
 - Budget breakdown table: Query ID, epsilon spent, date.
-- Trend chart (line chart) showing cumulative budget consumption over time.
 
-#### 7.6 API Keys Page (`/dashboard/settings` — sub-tab or section)
-- List current keys: Name, Prefix (`sk_live_ab...`), Last Used, Created.
-- Generate new key modal.
-- Revoke key with confirmation dialog.
-
-#### 7.7 Admin Pages
-- **Admin Dashboard:** Stat cards (orgs, users, queries, budget) + mini charts.
-- **Orgs Table:** Sortable/filterable by status, plan, query count. Action: view, activate, suspend.
-- **Users Table:** Sortable by org, role, last login. Action: activate/deactivate.
-- **Audit Log:** Filterable table with org/event type/date selectors and JSON payload viewer.
+#### 7.6 Admin Pages
+- **Admin Dashboard:** Stat cards (orgs, users, queries, budget).
+- **Orgs Table:** Sortable by status, query count. Action: activate, suspend.
+- **Users Table:** Sortable by org, role. Action: activate/deactivate.
 
 ---
 
@@ -559,14 +462,13 @@ All admin routes require `platform_admin` role.
 Add to `docker/postgres-init/init.sql` (or a new `003-seed-admin.sql`):
 ```sql
 /* Password: admin123 (bcrypt hash) */
-INSERT INTO users (id, email, password_hash, full_name, role, is_active, email_verified)
+INSERT INTO users (id, email, password_hash, full_name, role, is_active)
 VALUES (
     gen_random_uuid(),
     'admin@securum.dev',
     '$2b$12$<BCRYPT_HASH_OF_admin123>',
     'Platform Admin',
     'platform_admin',
-    true,
     true
 );
 ```
@@ -576,89 +478,38 @@ For the demo environment, also seed:
 - 1 org ("Demo Hospital Network") with status `active`.
 - 1 org_admin user for that org.
 - 1 analyst user for that org.
-- Org settings with default values.
-- Completed onboarding progress entries.
-- An API key.
+- Completed onboarding (`onboarding_step = 'onboarding_complete'`).
 
 This ensures `docker compose up` gives a working demo out of the box.
 
-#### 8.3 Auto-Registration Script
-Create `docker/scripts/auto-register-orgs.sh`:
-- Waits for coordinator to be healthy.
-- Registers 3 orgs via the API using the seeded admin account.
-- Saves API keys to a file for org-nodes to use.
-- This replaces the manual `POST /orgs/register` step from Phase 2.
-
 ---
 
-### Task 9 — Email Notifications (Simulated)
+### Task 9 — Multi-Tenancy Safety (Zain — Backend)
 
-For a proper SaaS, email is expected but don't actually set up an email service. Instead:
-
-#### 9.1 Notification Service Skeleton
-- `packages/coordinator/src/services/notifications.ts`
-- `sendEmail(to, subject, body)` — logs to console with a clear `[EMAIL]` prefix.
-- Uses:
-  - Registration confirmation
-  - Team invitation
-  - Password reset link
-  - Privacy budget warning (at 80% usage)
-
-#### 9.2 Console Output Format
-```
-[EMAIL] To: alice@example.com
-[EMAIL] Subject: You're invited to join "Hospital Alpha" on Securum
-[EMAIL] Body: Click to accept: http://localhost:3000/invite/abc123
-```
-
-> This makes it trivial to demo email flows without configuring SMTP. A production system would swap this with Resend, SendGrid, or SES.
-
----
-
-### Task 10 — Multi-Tenancy Safety (Zain — Backend)
-
-#### 10.1 Data Isolation Middleware
+#### 9.1 Data Isolation Middleware
 - Create `requireOrgScope` middleware:
   - Extracts `orgId` from JWT claims.
   - Adds `orgId` to all DB queries automatically.
   - Ensures users can only see their own org's data (queries, results, budget).
 - Platform admins bypass org scoping.
 
-#### 10.2 Query Scoping
+#### 9.2 Query Scoping
 - Update `POST /query` to tag queries with the submitter's `org_id`.
 - Update `GET /results` and `GET /results/:queryId` to filter by org.
 - Update `GET /audit/:queryId` to verify org ownership.
 
-#### 10.3 Rate Limiting (Lightweight)
-- Add a simple in-memory rate limiter (no Redis needed):
-  - Auth endpoints: 10 requests/minute per IP.
-  - Query endpoint: 20 requests/minute per org.
-- Use `express-rate-limit` package.
-
 ---
 
-### Task 11 — Password Reset Flow (Optional Enhancement)
+### Task 10 — Docker & Environment Updates (Both)
 
-#### 11.1 Backend
-- `POST /auth/forgot-password` — body: `{ email }`. Generates reset token, logs to console.
-- `POST /auth/reset-password` — body: `{ token, newPassword }`. Validates token, updates password.
-
-#### 11.2 Frontend
-- `/forgot-password` page — email form.
-- `/reset-password/:token` page — new password form.
-
----
-
-### Task 12 — Docker & Environment Updates (Both)
-
-#### 12.1 New Dependencies
+#### 10.1 New Dependencies
 ```bash
 # Coordinator
-npm install bcryptjs express-rate-limit
+npm install bcryptjs
 npm install -D @types/bcryptjs
 ```
 
-#### 12.2 Updated `.env.example`
+#### 10.2 Updated `.env.example`
 ```env
 # ── Coordinator ──
 PORT=4000
@@ -676,15 +527,13 @@ ADMIN_PASSWORD=admin123
 # ── Query Settings ──
 QUORUM_MIN=2
 DEFAULT_EPSILON=1.0
-MAX_EPSILON_PER_ORG=10.0
 
 # ── Dashboard ──
 VITE_API_URL=http://localhost:4000
 ```
 
-#### 12.3 Docker Compose Updates
+#### 10.3 Docker Compose Updates
 - Add `ADMIN_EMAIL` and `ADMIN_PASSWORD` to coordinator environment.
-- Update dashboard `depends_on` to wait for coordinator healthy.
 - Mount migration SQL alongside init SQL.
 
 ---
@@ -692,16 +541,16 @@ VITE_API_URL=http://localhost:4000
 ## Gotchas & Pitfalls
 
 ### 1. Transaction Safety on Registration
-The registration flow creates 3 rows (org, user, org_settings) across 3 tables. If ANY insert fails mid-way, you'll have orphaned rows. **Use `BEGIN...COMMIT` with rollback on error.** This is the #1 source of data corruption in multi-table registration flows.
+The registration flow creates 2 rows (org, user) across 2 tables. If ANY insert fails mid-way, you'll have orphaned rows. **Use `BEGIN...COMMIT` with rollback on error.**
 
 ### 2. JWT Claims Migration
-Changing JWT claims (`sub` from username to userId) will invalidate existing tokens. Users must re-login. In a production system, you'd version the JWT claims. For this project, clearing localStorage on upgrade is acceptable.
+Changing JWT claims (`sub` from username to userId) will invalidate existing tokens. Users must re-login. Clearing localStorage on upgrade is acceptable.
 
 ### 3. Password Hashing is Slow (on Purpose)
-bcrypt with 12 salt rounds takes ~250ms per hash. This is intentional — it slows brute-force attacks. But it also means registration/login endpoints have significant latency. Do NOT reduce salt rounds to speed up dev — the demo should reflect real-world behavior.
+bcrypt with 12 salt rounds takes ~250ms per hash. This is intentional — it slows brute-force attacks. Do NOT reduce salt rounds to speed up dev.
 
 ### 4. Schema Map Upload — Don't Trust Client Validation
-Even though the frontend validates the schema map JSON, the backend MUST re-validate. A malformed schema map will cause org-node query execution to fail silently in Phase 4's orchestration engine. Always validate against `GLOBAL_SCHEMA`.
+Even though the frontend validates the schema map JSON, the backend MUST re-validate. A malformed schema map will cause org-node query execution to fail silently. Always validate against `GLOBAL_SCHEMA`.
 
 ### 5. Role Escalation Prevention
 An org_admin can change member roles within their org, but they must NOT be able to:
@@ -737,10 +586,10 @@ curl -X POST http://localhost:4000/auth/login \
 # 3. Check onboarding status
 curl http://localhost:4000/onboarding/status \
   -H 'Authorization: Bearer <TOKEN>'
-# → { steps: [{step: "account_created", completedAt: "..."}], currentStep: "org_details_filled" }
+# → { orgId, currentStep: "account_created", isComplete: false }
 
 # 4. Complete onboarding steps...
-# (configure endpoint, upload schema, generate key, test connectivity)
+# (configure endpoint, upload schema, test connectivity, complete)
 
 # 5. Invite team member
 curl -X POST http://localhost:4000/orgs/me/invite \
@@ -759,8 +608,8 @@ curl http://localhost:4000/admin/stats \
 1. Open `localhost:3000` → See landing page with "Get Started" CTA.
 2. Click "Get Started" → Sign-up form → Fill in org details → Submit.
 3. Redirected to onboarding wizard → Walk through steps.
-4. Generate API key → Copy it → Test connectivity (will fail if no org-node is up — that's expected).
-5. Skip to dashboard → See empty state.
+4. Test connectivity (will fail if no org-node is up — that's expected).
+5. Complete onboarding → See dashboard.
 6. Go to Team → Invite a member → See pending invitation.
 7. Login as `admin@securum.dev` → See admin panel with org listing.
 8. Run a query → Verify results still work end-to-end.
@@ -771,7 +620,6 @@ Update `test-e2e.sh` to cover the new flows:
 # Register org via API
 # Login as org_admin
 # Complete onboarding
-# Generate API key
 # Submit query
 # Verify results
 # Check admin stats
@@ -787,30 +635,27 @@ Update `test-e2e.sh` to cover the new flows:
 | `packages/coordinator/src/auth/password.ts` | Zain | bcrypt password hashing |
 | `packages/coordinator/src/auth/rbac.ts` | Zain | Role-based access middleware |
 | `packages/coordinator/src/routes/onboarding.ts` | Zain | Onboarding wizard API |
-| `packages/coordinator/src/routes/orgs.ts` | Zain | Org management API (refactored from inline) |
+| `packages/coordinator/src/routes/orgs.ts` | Zain | Org management API |
 | `packages/coordinator/src/routes/admin.ts` | Zain | Platform admin API |
 | `packages/coordinator/src/routes/auth.ts` | Zain | Auth routes (refactored from inline) |
-| `packages/coordinator/src/services/notifications.ts` | Zain | Simulated email service |
 | `packages/dashboard/src/pages/LandingPage.tsx` | Rahul | Public landing page |
 | `packages/dashboard/src/pages/SignupPage.tsx` | Rahul | Org registration page |
 | `packages/dashboard/src/pages/OnboardingPage.tsx` | Rahul | Multi-step onboarding wizard |
 | `packages/dashboard/src/pages/InvitePage.tsx` | Rahul | Team invitation acceptance |
-| `packages/dashboard/src/pages/SettingsPage.tsx` | Rahul | Org settings + API keys |
+| `packages/dashboard/src/pages/SettingsPage.tsx` | Rahul | Org settings |
 | `packages/dashboard/src/pages/TeamPage.tsx` | Rahul | Team management |
 | `packages/dashboard/src/pages/BudgetPage.tsx` | Rahul | Privacy budget visualization |
 | `packages/dashboard/src/pages/admin/AdminDashboard.tsx` | Rahul | Admin overview |
 | `packages/dashboard/src/pages/admin/AdminOrgs.tsx` | Rahul | Admin org listing |
 | `packages/dashboard/src/pages/admin/AdminUsers.tsx` | Rahul | Admin user listing |
-| `packages/dashboard/src/pages/admin/AdminAudit.tsx` | Rahul | Admin audit log |
 | `docker/postgres-init/002-phase6-migration.sql` | Zain | New tables + ALTER statements |
-| `docker/postgres-init/003-seed-admin.sql` | Zain | Platform admin seed data |
 
 ### Modified Files
 | File | Owner | Changes |
-|------|-------|---------|
+|------|-------|---------| 
 | `packages/coordinator/src/index.ts` | Zain | Refactor routes into separate files, mount routers |
 | `packages/coordinator/src/config.ts` | Zain | Add `ADMIN_EMAIL`, `ADMIN_PASSWORD` |
-| `packages/coordinator/package.json` | Zain | Add `bcryptjs`, `express-rate-limit` |
+| `packages/coordinator/package.json` | Zain | Add `bcryptjs` |
 | `packages/dashboard/src/App.tsx` | Rahul | New routes structure |
 | `packages/dashboard/src/components/Layout.tsx` | Rahul | Updated sidebar with role-based navigation |
 | `packages/dashboard/src/context/AuthContext.tsx` | Rahul | Store full user object, org info |
@@ -826,21 +671,19 @@ Update `test-e2e.sh` to cover the new flows:
 
 | Task | Owner | Effort |
 |------|-------|--------|
-| Task 1 — Auth System Overhaul | Zain | 1.5 days |
-| Task 2 — Onboarding API | Zain | 1 day |
-| Task 3 — Org Management + Team APIs | Zain | 1 day |
-| Task 4 — Admin Panel API | Zain | 0.5 day |
+| Task 1 — Auth System Overhaul | Zain | 1 day |
+| Task 2 — Onboarding API | Zain | 0.5 day |
+| Task 3 — Org Management + Team APIs | Zain | 0.5 day |
+| Task 4 — Admin Panel API | Zain | 0.25 day |
 | Task 5 — Landing + Auth Frontend | Rahul | 1 day |
-| Task 6 — Onboarding Wizard Frontend | Rahul | 1 day |
-| Task 7 — Updated Dashboard + Admin | Rahul | 1.5 days |
-| Task 8 — Seed Data + Bootstrap | Both | 0.5 day |
-| Task 9 — Email Notifications (simulated) | Zain | 0.25 day |
-| Task 10 — Multi-Tenancy Safety | Zain | 0.5 day |
-| Task 11 — Password Reset (optional) | Both | 0.5 day |
-| Task 12 — Docker + Env Updates | Both | 0.25 day |
-| **Total** | | **~7 days** |
+| Task 6 — Onboarding Wizard Frontend | Rahul | 0.5 day |
+| Task 7 — Updated Dashboard + Admin | Rahul | 1 day |
+| Task 8 — Seed Data + Bootstrap | Both | 0.25 day |
+| Task 9 — Multi-Tenancy Safety | Zain | 0.25 day |
+| Task 10 — Docker + Env Updates | Both | 0.25 day |
+| **Total** | | **~4 days** |
 
-> Zain and Rahul can work in parallel after Task 1 is complete (Rahul needs the auth API to build the frontend). Target: Zain finishes Tasks 1–4 in ~4 days, Rahul starts Tasks 5–7 once Task 1 is merged.
+> Zain and Rahul can work in parallel after Task 1 is complete (Rahul needs the auth API to build the frontend). Target: Zain finishes Tasks 1–4 in ~2.5 days, Rahul starts Tasks 5–7 once Task 1 is merged.
 
 ---
 
@@ -852,28 +695,22 @@ Update `test-e2e.sh` to cover the new flows:
   - [ ] 1.3 Login endpoint update
   - [ ] 1.4 JWT claims update
   - [ ] 1.5 RBAC middleware
-  - [ ] 1.6 Refresh tokens (optional)
 - [ ] Task 2 — Onboarding API
   - [ ] 2.1 Status endpoint
-  - [ ] 2.2 Org details
-  - [ ] 2.3 Node endpoint
-  - [ ] 2.4 Schema map upload
-  - [ ] 2.5 API key generation
-  - [ ] 2.6 Connectivity test
-  - [ ] 2.7 Complete onboarding
+  - [ ] 2.2 Node endpoint
+  - [ ] 2.3 Schema map upload
+  - [ ] 2.4 Connectivity test
+  - [ ] 2.5 Complete onboarding
 - [ ] Task 3 — Org Management & Team APIs
   - [ ] 3.1 Org profile
   - [ ] 3.2 Team management
   - [ ] 3.3 Invitation acceptance
-  - [ ] 3.4 API key management
-  - [ ] 3.5 Privacy budget data
-  - [ ] 3.6 Org settings
+  - [ ] 3.4 Privacy budget data
+  - [ ] 3.5 Org settings
 - [ ] Task 4 — Admin Panel API
 - [ ] Task 5 — Landing & Auth Pages (Frontend)
 - [ ] Task 6 — Onboarding Wizard (Frontend)
 - [ ] Task 7 — Updated Dashboard (Frontend)
 - [ ] Task 8 — Seed Data & Bootstrap
-- [ ] Task 9 — Email Notifications (simulated)
-- [ ] Task 10 — Multi-Tenancy Safety
-- [ ] Task 11 — Password Reset Flow
-- [ ] Task 12 — Docker & Environment Updates
+- [ ] Task 9 — Multi-Tenancy Safety
+- [ ] Task 10 — Docker & Environment Updates

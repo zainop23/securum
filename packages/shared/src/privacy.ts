@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 export function computeCommitment(value: string, nonce: string, queryId: string): string {
   return createHash('sha256').update(value + nonce + queryId).digest('hex');
 }
-
+  
 export function addLaplaceNoise(trueValue: number, sensitivity: number, epsilon: number): number {
   if (!Number.isFinite(trueValue)) {
     throw new Error('trueValue must be finite');
