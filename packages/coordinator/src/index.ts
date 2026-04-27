@@ -277,7 +277,7 @@ app.post(
 
     res.status(202).json({ queryId, status: 'processing' });
 
-    runOrchestration(pool, queryId, def, epsilon).catch((err) => {
+    runOrchestration(pool, queryId, def, epsilon, user.orgId ?? null).catch((err) => {
       console.error(`[orchestration] Background failure for ${queryId}:`, err);
     });
   })

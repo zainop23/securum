@@ -18,17 +18,53 @@ export default function BudgetPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchBudget = async () => {
+    let isMounted = true;
+
+    const fetchBudget = async (showLoader: boolean) => {
+      if (showLoader) {
+        setLoading(true);
+      }
       try {
         const { data } = await client.get('/orgs/me/privacy-budget');
-        setBudget(data);
+        if (isMounted) {
+          setBudget(data);
+        }
       } catch (err) {
         console.error('Failed to fetch budget:', err);
       } finally {
-        setLoading(false);
+        if (showLoader && isMounted) {
+          setLoading(false);
+        }
       }
     };
-    fetchBudget();
+
+    fetchBudget(true);
+
+    const intervalId = window.setInterval(() => {
+      fetchBudget(false);
+    }, 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchBudget(false);
+      }
+    };
+
+    const handleBudgetUpdate = () => {
+      fetchBudget(false);
+    };
+
+    window.addEventListener('focus', handleVisibility);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('privacy-budget-updated', handleBudgetUpdate);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleVisibility);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('privacy-budget-updated', handleBudgetUpdate);
+    };
   }, []);
 
   if (loading) {

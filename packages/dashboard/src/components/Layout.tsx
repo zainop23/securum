@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
@@ -63,12 +63,16 @@ export default function Layout() {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <div className="flex items-center gap-2">
+        <Link
+          to="/"
+          className="flex items-center gap-2"
+          style={{ textDecoration: 'none' }}
+        >
           <div style={{ width: 28, height: 28, background: '#bef264', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#131f00' }}>shield_lock</span>
           </div>
           <span style={{ fontWeight: 700, color: '#bef264', fontSize: '1rem', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase', letterSpacing: '-0.02em' }}>Securum</span>
-        </div>
+        </Link>
       </div>
 
       {/* Sidebar Backdrop (mobile only) */}
@@ -82,7 +86,12 @@ export default function Layout() {
         {/* Logo area */}
         <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid rgba(190,242,100,0.08)' }}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="flex items-center gap-3"
+              style={{ textDecoration: 'none' }}
+              onClick={() => setSidebarOpen(false)}
+            >
               <div
                 className="flex items-center justify-center"
                 style={{ width: 36, height: 36, background: '#bef264' }}
@@ -95,7 +104,7 @@ export default function Layout() {
                   {user?.orgName || 'Platform'}
                 </p>
               </div>
-            </div>
+            </Link>
             {/* Close button — only visible on mobile via CSS */}
             <button
               className="sidebar-close-btn hamburger-btn"

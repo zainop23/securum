@@ -53,6 +53,7 @@ export default function QueryPage() {
 
   const handleOrchestrationComplete = () => {
     if (activeQueryId) {
+      window.dispatchEvent(new CustomEvent('privacy-budget-updated'));
       navigate(`/dashboard/results/${activeQueryId}`);
     }
   };

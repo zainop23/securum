@@ -336,7 +336,8 @@ export async function runOrchestration(
   dbPool: Pool,
   queryId: string,
   queryDefinition: QueryDefinition,
-  epsilon: number
+  epsilon: number,
+  submitterOrgId: string | null
 ): Promise<OrchestrationResult> {
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
@@ -368,7 +369,7 @@ export async function runOrchestration(
 
   try {
     return await Promise.race([
-      _runPipeline(dbPool, queryId, queryDefinition, epsilon),
+      _runPipeline(dbPool, queryId, queryDefinition, epsilon, submitterOrgId),
       timeoutPromise,
     ]);
   } finally {
@@ -382,7 +383,8 @@ async function _runPipeline(
   dbPool: Pool,
   queryId: string,
   queryDefinition: QueryDefinition,
-  epsilon: number
+  epsilon: number,
+  submitterOrgId: string | null
 ): Promise<OrchestrationResult> {
   const fail = async (error: string): Promise<OrchestrationFailure> => {
     await updateQueryStatus(dbPool, queryId, 'failed');
@@ -485,6 +487,15 @@ async function _runPipeline(
         `INSERT INTO privacy_budget (id, org_id, query_id, epsilon_spent, created_at)
          VALUES ($1, $2, $3, $4, NOW())`,
         [randomUUID(), org.id, queryId, epsilon]
+      );
+    }
+
+    if (submitterOrgId) {
+      await dbPool.query(
+        `INSERT INTO privacy_budget (id, org_id, query_id, epsilon_spent, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (org_id, query_id) DO NOTHING`,
+        [randomUUID(), submitterOrgId, queryId, epsilon]
       );
     }
 

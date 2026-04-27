@@ -276,6 +276,37 @@ orgsRouter.get(
   asyncHandler(async (req, res) => {
     const user = (req as AuthenticatedRequest).user!;
 
+    if (user.role === 'platform_admin' && !user.orgId) {
+      const totalsResult = await pool.query(
+        `SELECT
+           COALESCE(SUM(privacy_budget_limit), 0) AS total_budget
+         FROM organizations`
+      );
+      const totalBudget = parseFloat(totalsResult.rows[0]?.total_budget ?? '0');
+
+      const spentResult = await pool.query(
+        'SELECT COALESCE(SUM(epsilon_spent), 0) AS spent, COUNT(*) AS query_count FROM privacy_budget'
+      );
+      const spent = parseFloat(spentResult.rows[0].spent);
+      const queryCount = parseInt(spentResult.rows[0].query_count, 10);
+
+      const historyResult = await pool.query(
+        `SELECT pb.query_id, pb.epsilon_spent, pb.created_at
+         FROM privacy_budget pb
+         ORDER BY pb.created_at DESC
+         LIMIT 50`
+      );
+
+      res.json({
+        totalBudget,
+        spent,
+        remaining: Math.max(totalBudget - spent, 0),
+        queryCount,
+        history: historyResult.rows,
+      });
+      return;
+    }
+
     const orgResult = await pool.query(
       'SELECT privacy_budget_limit FROM organizations WHERE id = $1',
       [user.orgId]
