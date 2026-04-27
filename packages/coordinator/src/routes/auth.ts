@@ -169,19 +169,35 @@ authRouter.post(
         org_name: string | null;
       };
 
+      if (!user.password_hash) {
+        sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
+        return;
+      }
+
       if (!user.is_active) {
         sendError(res, 403, 'Account is deactivated', 'FORBIDDEN');
         return;
       }
 
-      const valid = await verifyPassword(password, user.password_hash);
+      let valid = false;
+      try {
+        valid = await verifyPassword(password, user.password_hash);
+      } catch (err) {
+        console.warn('Password verification failed during login:', err);
+        sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
+        return;
+      }
       if (!valid) {
         sendError(res, 401, 'Invalid credentials', 'UNAUTHORIZED');
         return;
       }
 
       // Update last_login_at
-      await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+      try {
+        await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+      } catch (err) {
+        console.warn('Unable to update last_login_at for user login:', err);
+      }
 
       const claims: JwtClaims = {
         sub: user.id,
