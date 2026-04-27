@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-
-interface Org {
-  id: string;
-  name: string;
-  endpoint_url: string;
-  status: string;
-  created_at: string;
-}
+import { useAuth } from '../context/AuthContext';
 
 interface QueryRow {
   query_id: string;
@@ -18,18 +11,14 @@ interface QueryRow {
 }
 
 export default function HomePage() {
-  const [orgs, setOrgs] = useState<Org[]>([]);
+  const { user } = useAuth();
   const [queries, setQueries] = useState<QueryRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [orgsRes, queriesRes] = await Promise.all([
-          client.get('/orgs'),
-          client.get('/results'),
-        ]);
-        setOrgs(orgsRes.data.orgs || []);
+        const queriesRes = await client.get('/results');
         setQueries(queriesRes.data.results || []);
       } catch (err) {
         console.error('Failed to fetch overview data:', err);
@@ -48,10 +37,10 @@ export default function HomePage() {
         <div className="skeleton" style={{ height: 32, width: 200 }} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="skeleton" style={{ height: 144, borderRadius: 16 }} />
+            <div key={i} className="skeleton" style={{ height: 144 }} />
           ))}
         </div>
-        <div className="skeleton" style={{ height: 256, borderRadius: 16 }} />
+        <div className="skeleton" style={{ height: 256 }} />
       </div>
     );
   }
@@ -60,75 +49,68 @@ export default function HomePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Header */}
       <div className="animate-fade-in">
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
-        <p style={{ color: '#94A3B8', marginTop: '0.25rem' }}>Monitor your secure analytics platform</p>
+        <div className="flex items-center gap-2 mb-2">
+          <span style={{ width: 8, height: 8, background: '#bef264', borderRadius: '50%' }} className="animate-pulse" />
+          <span style={{ fontFamily: 'monospace', color: '#bef264', textTransform: 'uppercase', letterSpacing: '0.15em', fontSize: '0.65rem' }}>System Active</span>
+        </div>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#e5e2e1', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>
+          Dashboard Overview
+        </h1>
+        <p style={{ color: '#71717a', marginTop: '0.25rem', fontSize: '0.9rem' }}>
+          Welcome back, {user?.fullName || 'Operator'}
+        </p>
       </div>
 
       {/* Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
-        {/* Orgs Card */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+        {/* Total Queries Card */}
         <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.1s' }}>
           <div className="flex items-start justify-between">
             <div>
-              <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Organizations</p>
-              <p style={{ fontSize: '2.5rem', fontWeight: 700, color: '#F8FAFC', marginTop: '0.5rem', lineHeight: 1 }}>{orgs.length}</p>
-              <p style={{ fontSize: '0.8rem', color: '#14B8A6', marginTop: '0.5rem', fontWeight: 500 }}>Connected & Active</p>
+              <p style={{ fontSize: '0.65rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif" }}>Total Queries</p>
+              <p style={{ fontSize: '2.5rem', fontWeight: 700, color: '#e5e2e1', fontFamily: "'Space Grotesk', sans-serif", marginTop: '0.5rem', lineHeight: 1 }}>{queries.length}</p>
+              <p style={{ fontSize: '0.75rem', color: '#4edea3', marginTop: '0.5rem', fontWeight: 600 }}>Executed</p>
             </div>
-            <div
-              className="flex items-center justify-center"
-              style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(99,102,241,0.12)' }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* Total Queries Card */}
-        <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.2s' }}>
-          <div className="flex items-start justify-between">
-            <div>
-              <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total Queries</p>
-              <p style={{ fontSize: '2.5rem', fontWeight: 700, color: '#F8FAFC', marginTop: '0.5rem', lineHeight: 1 }}>{queries.length}</p>
-              <p style={{ fontSize: '0.8rem', color: '#14B8A6', marginTop: '0.5rem', fontWeight: 500 }}>Executed</p>
-            </div>
-            <div
-              className="flex items-center justify-center"
-              style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(20,184,166,0.12)' }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" strokeWidth="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
+            <div className="flex items-center justify-center" style={{ width: 40, height: 40, background: 'rgba(190,242,100,0.1)', border: '1px solid rgba(190,242,100,0.15)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '1.25rem', color: '#bef264' }}>analytics</span>
             </div>
           </div>
         </div>
 
         {/* Success Rate Card */}
-        <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.3s' }}>
+        <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.2s' }}>
           <div className="flex items-start justify-between">
             <div>
-              <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Success Rate</p>
-              <p style={{ fontSize: '2.5rem', fontWeight: 700, color: '#F8FAFC', marginTop: '0.5rem', lineHeight: 1 }}>
+              <p style={{ fontSize: '0.65rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif" }}>Success Rate</p>
+              <p style={{ fontSize: '2.5rem', fontWeight: 700, color: '#e5e2e1', fontFamily: "'Space Grotesk', sans-serif", marginTop: '0.5rem', lineHeight: 1 }}>
                 {queries.length > 0
                   ? `${Math.round((queries.filter((q) => q.status === 'done').length / queries.length) * 100)}%`
                   : '—'}
               </p>
-              <p style={{ fontSize: '0.8rem', color: '#14B8A6', marginTop: '0.5rem', fontWeight: 500 }}>
+              <p style={{ fontSize: '0.75rem', color: '#4edea3', marginTop: '0.5rem', fontWeight: 600 }}>
                 {queries.filter((q) => q.status === 'done').length} completed
               </p>
             </div>
-            <div
-              className="flex items-center justify-center"
-              style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(20,184,166,0.12)' }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
+            <div className="flex items-center justify-center" style={{ width: 40, height: 40, background: 'rgba(78,222,163,0.1)', border: '1px solid rgba(78,222,163,0.15)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '1.25rem', color: '#4edea3' }}>check_circle</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Role Card */}
+        <div className="glass-card animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.3s' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p style={{ fontSize: '0.65rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif" }}>Your Role</p>
+              <p style={{ fontSize: '1.25rem', fontWeight: 700, color: '#bef264', fontFamily: "'Space Grotesk', sans-serif", marginTop: '0.5rem', textTransform: 'uppercase' }}>
+                {user?.role?.replace('_', ' ') || '—'}
+              </p>
+              <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '0.5rem', fontWeight: 500 }}>
+                {user?.orgName || 'Platform'}
+              </p>
+            </div>
+            <div className="flex items-center justify-center" style={{ width: 40, height: 40, background: 'rgba(190,242,100,0.1)', border: '1px solid rgba(190,242,100,0.15)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '1.25rem', color: '#bef264' }}>person</span>
             </div>
           </div>
         </div>
@@ -136,39 +118,26 @@ export default function HomePage() {
 
       {/* Actions */}
       <div className="flex gap-4 animate-fade-in flex-wrap" style={{ animationDelay: '0.4s' }}>
-        <Link to="/query" className="btn-primary" id="btn-go-query">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+        <Link to="/dashboard/query" className="btn-primary" id="btn-go-query" style={{ padding: '10px 20px', fontSize: '0.75rem' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
           New Query
         </Link>
-        <Link
-          to="/history"
-          className="btn-secondary"
-          id="btn-go-history"
-        >
+        <Link to="/dashboard/history" className="btn-secondary" id="btn-go-history" style={{ padding: '10px 20px', fontSize: '0.75rem' }}>
           View All History
         </Link>
       </div>
 
       {/* Recent Queries */}
-      <div className="glass-card-static animate-slide-up" style={{ padding: '1.5rem', animationDelay: '0.5s' }}>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#F8FAFC', marginBottom: '1rem' }}>Recent Queries</h2>
+      <div className="glass-card-static animate-slide-up" style={{ overflow: 'hidden', animationDelay: '0.5s' }}>
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(190,242,100,0.05)' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, color: '#e5e2e1', fontFamily: "'Space Grotesk', sans-serif" }}>Recent Queries</h2>
+        </div>
         {recentQueries.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-            <div
-              className="flex items-center justify-center"
-              style={{ width: 64, height: 64, borderRadius: 9999, background: 'rgba(30,45,64,0.5)', margin: '0 auto 1rem' }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-            </div>
-            <p style={{ color: '#94A3B8' }}>No queries yet.</p>
-            <p style={{ color: '#64748B', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              <Link to="/query" style={{ color: '#818cf8', textDecoration: 'none' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '2.5rem', color: '#52525b', display: 'block', marginBottom: '0.75rem' }}>search</span>
+            <p style={{ color: '#71717a' }}>No queries yet.</p>
+            <p style={{ color: '#52525b', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              <Link to="/dashboard/query" style={{ color: '#bef264', textDecoration: 'none' }}>
                 Run your first query →
               </Link>
             </p>
@@ -177,34 +146,29 @@ export default function HomePage() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }} className="responsive-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid #1E2D40' }}>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Query ID</th>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</th>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Submitted By</th>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Time</th>
-                  <th style={{ textAlign: 'right', padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Action</th>
+                <tr>
+                  {['Query ID', 'Status', 'Submitted By', 'Time', 'Action'].map((h) => (
+                    <th key={h} style={{ textAlign: h === 'Action' ? 'right' : 'left', padding: '0.75rem 1.25rem', fontSize: '0.6rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Space Grotesk', sans-serif" }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {recentQueries.map((q) => (
-                  <tr key={q.query_id} style={{ borderBottom: '1px solid rgba(30,45,64,0.5)', transition: 'background 0.2s' }}>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', fontFamily: 'monospace', color: '#94A3B8' }}>
-                      {q.query_id.slice(0, 8)}…
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <span className={`badge badge-${q.status}`}>
-                        ● {q.status}
+                  <tr key={q.query_id} style={{ borderTop: '1px solid rgba(190,242,100,0.05)' }}>
+                    <td style={{ padding: '0.75rem 1.25rem' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#a1a1aa', background: 'rgba(42,42,42,0.5)', padding: '0.15rem 0.5rem' }}>
+                        {q.query_id.slice(0, 8)}…
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#94A3B8' }}>{q.submitted_by}</td>
-                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#64748B' }}>
+                    <td style={{ padding: '0.75rem 1.25rem' }}>
+                      <span className={`badge badge-${q.status}`}>● {q.status}</span>
+                    </td>
+                    <td style={{ padding: '0.75rem 1.25rem', fontSize: '0.85rem', color: '#a1a1aa' }}>{q.submitted_by}</td>
+                    <td style={{ padding: '0.75rem 1.25rem', fontSize: '0.8rem', color: '#52525b' }}>
                       {new Date(q.created_at).toLocaleString()}
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                      <Link
-                        to={`/results/${q.query_id}`}
-                        style={{ fontSize: '0.875rem', color: '#818cf8', textDecoration: 'none', fontWeight: 500 }}
-                      >
+                    <td style={{ padding: '0.75rem 1.25rem', textAlign: 'right' }}>
+                      <Link to={`/dashboard/results/${q.query_id}`} style={{ fontSize: '0.8rem', color: '#bef264', textDecoration: 'none', fontWeight: 600 }}>
                         View →
                       </Link>
                     </td>

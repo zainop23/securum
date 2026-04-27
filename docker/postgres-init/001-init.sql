@@ -4,7 +4,7 @@ create table organizations(
     name varchar(250) unique not null,
     api_key_hash varchar(250) not null,
     endpoint_url varchar(512) not null,
-    status varchar(20) not null default 'active' check (status in ('active','inactive')),
+    status varchar(20) not null default 'active' check (status in ('active','inactive','pending')),
     created_at timestamptz default NOW()
 );
 
