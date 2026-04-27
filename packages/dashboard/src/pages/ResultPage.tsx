@@ -31,14 +31,14 @@ interface ResultData {
 }
 
 const CHART_COLORS = [
-  '#6366F1', // indigo
-  '#14B8A6', // teal
-  '#818cf8', // light indigo
-  '#2dd4bf', // light teal
-  '#a78bfa', // violet
-  '#67e8f9', // cyan
+  '#bef264', // lime
+  '#4edea3', // green
+  '#00dbe9', // cyan
   '#FCD34D', // amber
-  '#F87171', // rose
+  '#a78bfa', // violet
+  '#67e8f9', // light cyan
+  '#ffb4ab', // rose
+  '#818cf8', // indigo
 ];
 
 const COMPLETED_EXECUTION_STEPS = [
@@ -99,7 +99,7 @@ export default function ResultPage() {
           </div>
           <p style={{ color: '#F87171', fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem' }}>Error Loading Result</p>
           <p style={{ color: '#94A3B8', fontSize: '0.875rem' }}>{error}</p>
-          <Link to="/query" className="btn-primary" style={{ marginTop: '1.5rem', display: 'inline-flex' }}>
+          <Link to="/dashboard/query" className="btn-primary" style={{ marginTop: '1.5rem', display: 'inline-flex' }}>
             Run Another Query
           </Link>
         </div>
@@ -152,7 +152,7 @@ export default function ResultPage() {
           }}>
             <p style={{ fontSize: '0.875rem', color: '#94A3B8', fontFamily: 'monospace' }}>Query ID: {data.queryId}</p>
           </div>
-          <Link to="/query" className="btn-primary" id="btn-try-again">
+          <Link to="/dashboard/query" className="btn-primary" id="btn-try-again">
             Run Another Query
           </Link>
         </div>
@@ -209,7 +209,7 @@ export default function ResultPage() {
           <p style={{
             fontSize: 'clamp(2.5rem, 8vw, 4rem)',
             fontWeight: 800,
-            background: 'linear-gradient(135deg, #6366F1, #14B8A6)',
+            background: 'linear-gradient(135deg, #bef264, #4edea3)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -331,7 +331,7 @@ export default function ResultPage() {
 
       {/* Action */}
       <div className="flex gap-4 flex-wrap">
-        <Link to="/query" className="btn-primary" id="btn-run-another">
+        <Link to="/dashboard/query" className="btn-primary" id="btn-run-another">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
@@ -339,7 +339,7 @@ export default function ResultPage() {
           Run Another Query
         </Link>
         <Link
-          to="/history"
+          to="/dashboard/history"
           className="btn-secondary"
         >
           View All History

@@ -53,7 +53,7 @@ export default function QueryPage() {
 
   const handleOrchestrationComplete = () => {
     if (activeQueryId) {
-      navigate(`/results/${activeQueryId}`);
+      navigate(`/dashboard/results/${activeQueryId}`);
     }
   };
 
@@ -64,11 +64,11 @@ export default function QueryPage() {
   };
 
   const getPrivacyLabel = () => {
-    if (epsilon <= 0.5) return { text: 'Very High Privacy', color: '#14B8A6' };
-    if (epsilon <= 1.0) return { text: 'High Privacy', color: '#14B8A6' };
+    if (epsilon <= 0.5) return { text: 'Very High Privacy', color: '#4edea3' };
+    if (epsilon <= 1.0) return { text: 'High Privacy', color: '#4edea3' };
     if (epsilon <= 3.0) return { text: 'Moderate Privacy', color: '#FCD34D' };
     if (epsilon <= 7.0) return { text: 'Low Privacy', color: '#FCD34D' };
-    return { text: 'Minimal Privacy', color: '#F87171' };
+    return { text: 'Minimal Privacy', color: '#ffb4ab' };
   };
 
   const privacy = getPrivacyLabel();
@@ -77,8 +77,8 @@ export default function QueryPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Header */}
       <div className="animate-fade-in">
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em' }}>Query Builder</h1>
-        <p style={{ color: '#94A3B8', marginTop: '0.25rem' }}>Build and execute differentially-private aggregate queries</p>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#e5e2e1', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>Query Builder</h1>
+        <p style={{ color: '#71717a', marginTop: '0.25rem' }}>Build and execute differentially-private aggregate queries</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
@@ -114,7 +114,7 @@ export default function QueryPage() {
 
               {/* Aggregate */}
               <div>
-                <label htmlFor="query-aggregate" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#94A3B8', marginBottom: '0.5rem' }}>
+                <label htmlFor="query-aggregate" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#71717a', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Space Grotesk', sans-serif" }}>
                   Aggregate Function
                 </label>
                 <select
@@ -140,7 +140,7 @@ export default function QueryPage() {
 
               {/* Column */}
               <div>
-                <label htmlFor="query-column" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#94A3B8', marginBottom: '0.5rem' }}>
+                <label htmlFor="query-column" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#71717a', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Space Grotesk', sans-serif" }}>
                   Column
                 </label>
                 <select
@@ -163,7 +163,7 @@ export default function QueryPage() {
 
               {/* Table — fixed to transactions for demo */}
               <div>
-                <label htmlFor="query-table" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#94A3B8', marginBottom: '0.5rem' }}>
+                <label htmlFor="query-table" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#71717a', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Space Grotesk', sans-serif" }}>
                   Table
                 </label>
                 <select id="query-table" className="input-field" disabled>
@@ -174,8 +174,8 @@ export default function QueryPage() {
 
               {/* Group By */}
               <div>
-                <label htmlFor="query-groupby" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#94A3B8', marginBottom: '0.5rem' }}>
-                  Group By <span style={{ color: '#64748B' }}>(optional)</span>
+                <label htmlFor="query-groupby" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#71717a', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Space Grotesk', sans-serif" }}>
+                  Group By <span style={{ color: '#52525b' }}>(optional)</span>
                 </label>
                 <select
                   id="query-groupby"
@@ -194,7 +194,7 @@ export default function QueryPage() {
 
               {/* Epsilon Slider */}
               <div>
-                <label htmlFor="query-epsilon" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#94A3B8', marginBottom: '0.5rem' }}>
+                <label htmlFor="query-epsilon" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#71717a', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Space Grotesk', sans-serif" }}>
                   Privacy Budget (ε)
                 </label>
                 <div className="flex items-center gap-4">
@@ -213,19 +213,19 @@ export default function QueryPage() {
                       borderRadius: 9999,
                       appearance: 'none',
                       cursor: activeQueryId ? 'not-allowed' : 'pointer',
-                      background: 'linear-gradient(90deg, #14B8A6, #FCD34D, #F87171)',
+                      background: 'linear-gradient(90deg, #4edea3, #FCD34D, #ffb4ab)',
                       outline: 'none',
                     }}
                     className="epsilon-slider"
                   />
-                  <span style={{ fontSize: '1.125rem', fontWeight: 700, color: '#F8FAFC', minWidth: '3rem', textAlign: 'right' }}>
+                  <span style={{ fontSize: '1.125rem', fontWeight: 700, color: '#e5e2e1', minWidth: '3rem', textAlign: 'right', fontFamily: "'Space Grotesk', sans-serif" }}>
                     {epsilon.toFixed(1)}
                   </span>
                 </div>
                 <div className="flex justify-between" style={{ marginTop: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: '#14B8A6' }}>More Private</span>
+                  <span style={{ fontSize: '0.7rem', color: '#4edea3' }}>More Private</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 600, color: privacy.color }}>{privacy.text}</span>
-                  <span style={{ fontSize: '0.7rem', color: '#F87171' }}>More Accurate</span>
+                  <span style={{ fontSize: '0.7rem', color: '#ffb4ab' }}>More Accurate</span>
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.25rem', fontStyle: 'italic' }}>
                   Lower ε = more privacy noise added, less accurate results

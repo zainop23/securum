@@ -41,10 +41,10 @@ export default function HistoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between animate-fade-in flex-wrap gap-4">
         <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em' }}>Query History</h1>
-          <p style={{ color: '#94A3B8', marginTop: '0.25rem' }}>All executed queries and their results</p>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#e5e2e1', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '-0.02em' }}>Query History</h1>
+          <p style={{ color: '#71717a', marginTop: '0.25rem' }}>All executed queries and their results</p>
         </div>
-        <Link to="/query" className="btn-primary" id="btn-new-query">
+        <Link to="/dashboard/query" className="btn-primary" id="btn-new-query" style={{ padding: '8px 20px', fontSize: '0.75rem' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
@@ -68,7 +68,7 @@ export default function HistoryPage() {
             </div>
             <p style={{ color: '#94A3B8', fontSize: '1.125rem', fontWeight: 600 }}>No queries found</p>
             <p style={{ color: '#64748B', fontSize: '0.875rem', marginTop: '0.5rem' }}>
-              <Link to="/query" style={{ color: '#818cf8', textDecoration: 'none' }}>
+              <Link to="/dashboard/query" style={{ color: '#bef264', textDecoration: 'none' }}>
                 Run your first query →
               </Link>
             </p>
@@ -119,14 +119,14 @@ export default function HistoryPage() {
                     </td>
                     <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                       <Link
-                        to={`/results/${q.query_id}`}
+                        to={`/dashboard/results/${q.query_id}`}
                         className="flex items-center gap-1"
                         style={{
                           display: 'inline-flex',
-                          fontSize: '0.875rem',
-                          color: '#818cf8',
+                          fontSize: '0.8rem',
+                          color: '#bef264',
                           textDecoration: 'none',
-                          fontWeight: 500,
+                          fontWeight: 600,
                         }}
                       >
                         View
@@ -150,10 +150,10 @@ export default function HistoryPage() {
             Total: <strong style={{ color: '#94A3B8' }}>{queries.length}</strong>
           </span>
           <span>
-            Completed: <strong style={{ color: '#14B8A6' }}>{queries.filter((q) => q.status === 'done').length}</strong>
+            Completed: <strong style={{ color: '#4edea3' }}>{queries.filter((q) => q.status === 'done').length}</strong>
           </span>
           <span>
-            Failed: <strong style={{ color: '#F87171' }}>{queries.filter((q) => q.status === 'failed').length}</strong>
+            Failed: <strong style={{ color: '#ffb4ab' }}>{queries.filter((q) => q.status === 'failed').length}</strong>
           </span>
         </div>
       )}

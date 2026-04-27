@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -40,8 +40,15 @@ export default function Layout() {
   const linkClasses = ({ isActive }: { isActive: boolean }) =>
     `sidebar-nav-item ${isActive ? 'active' : ''}`;
 
+  const isOrgAdmin = user?.role === 'org_admin' || user?.role === 'platform_admin';
+  const isPlatformAdmin = user?.role === 'platform_admin';
+
+  const userInitials = user?.fullName
+    ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
   return (
-    <div className="flex min-h-screen" style={{ background: '#080B14' }}>
+    <div className="flex min-h-screen" style={{ background: '#131313' }}>
       {/* Mobile Top Bar */}
       <div className="mobile-topbar">
         <button
@@ -57,12 +64,10 @@ export default function Layout() {
           </svg>
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366F1, #14B8A6)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
+          <div style={{ width: 28, height: 28, background: '#bef264', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#131f00' }}>shield_lock</span>
           </div>
-          <span style={{ fontWeight: 700, color: '#F8FAFC', fontSize: '1rem', letterSpacing: '-0.02em' }}>Securum</span>
+          <span style={{ fontWeight: 700, color: '#bef264', fontSize: '1rem', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase', letterSpacing: '-0.02em' }}>Securum</span>
         </div>
       </div>
 
@@ -75,25 +80,20 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         {/* Logo area */}
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(99,102,241,0.1)' }}>
+        <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid rgba(190,242,100,0.08)' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div
                 className="flex items-center justify-center"
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #6366F1, #14B8A6)',
-                }}
+                style={{ width: 36, height: 36, background: '#bef264' }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#131f00' }}>shield_lock</span>
               </div>
               <div>
-                <h1 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Securum</h1>
-                <p style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>Analytics</p>
+                <h1 style={{ fontSize: '1rem', fontWeight: 700, color: '#bef264', fontFamily: "'Space Grotesk', sans-serif", textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Securum</h1>
+                <p style={{ fontSize: '0.55rem', color: '#52525b', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Space Grotesk', sans-serif" }}>
+                  {user?.orgName || 'Platform'}
+                </p>
               </div>
             </div>
             {/* Close button — only visible on mobile via CSS */}
@@ -113,45 +113,88 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav style={{ flex: 1, padding: '1.25rem 1rem', display: 'flex', flexDirection: 'column' as const, gap: '0.25rem' }}>
-          <NavLink to="/" end className={linkClasses} id="nav-home">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
+        <nav style={{ flex: 1, padding: '0.75rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+          {/* Analytics Section */}
+          <div className="sidebar-section-label">Analytics</div>
+
+          <NavLink to="/dashboard" end className={linkClasses} id="nav-home">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>dashboard</span>
             Overview
           </NavLink>
 
-          <NavLink to="/query" className={linkClasses} id="nav-query">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
+          <NavLink to="/dashboard/query" className={linkClasses} id="nav-query">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>search</span>
             Query Builder
           </NavLink>
 
-          <NavLink to="/history" className={linkClasses} id="nav-history">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
+          <NavLink to="/dashboard/history" className={linkClasses} id="nav-history">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>schedule</span>
             History
           </NavLink>
+
+          {/* Organization Section */}
+          <div className="sidebar-section-label">Organization</div>
+
+          <NavLink to="/dashboard/budget" className={linkClasses} id="nav-budget">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>privacy_tip</span>
+            Privacy Budget
+          </NavLink>
+
+          {isOrgAdmin && (
+            <>
+              <NavLink to="/dashboard/settings" className={linkClasses} id="nav-settings">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>settings</span>
+                Settings
+              </NavLink>
+
+              <NavLink to="/dashboard/team" className={linkClasses} id="nav-team">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>group</span>
+                Team
+              </NavLink>
+            </>
+          )}
+
+          {/* Admin Section */}
+          {isPlatformAdmin && (
+            <>
+              <div className="sidebar-section-label">Admin</div>
+
+              <NavLink to="/admin" end className={linkClasses} id="nav-admin">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>admin_panel_settings</span>
+                Overview
+              </NavLink>
+
+              <NavLink to="/admin/orgs" className={linkClasses} id="nav-admin-orgs">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>apartment</span>
+                Organizations
+              </NavLink>
+
+              <NavLink to="/admin/users" className={linkClasses} id="nav-admin-users">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>manage_accounts</span>
+                Users
+              </NavLink>
+            </>
+          )}
         </nav>
 
-        {/* Logout */}
-        <div style={{ padding: '1rem', borderTop: '1px solid rgba(99,102,241,0.1)' }}>
+        {/* User Info & Logout */}
+        <div style={{ padding: '0.75rem', borderTop: '1px solid rgba(190,242,100,0.08)' }}>
+          <div className="flex items-center gap-3" style={{ padding: '0.5rem 0.75rem', marginBottom: '0.5rem' }}>
+            <div className="flex items-center justify-center" style={{ width: 32, height: 32, background: 'rgba(190,242,100,0.15)', fontSize: '0.7rem', fontWeight: 700, color: '#bef264', fontFamily: "'Space Grotesk', sans-serif" }}>
+              {userInitials}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e5e2e1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.fullName || 'User'}</p>
+              <p style={{ fontSize: '0.6rem', color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{user?.role?.replace('_', ' ') || 'Unknown'}</p>
+            </div>
+          </div>
           <button
             onClick={handleLogout}
             id="btn-logout"
             className="sidebar-nav-item"
-            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: '#71717a' }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>logout</span>
             Logout
           </button>
         </div>

@@ -177,14 +177,14 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
   const getStatusIcon = (status: 'running' | 'done' | 'error') => {
     if (status === 'done') {
       return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14B8A6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4edea3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       );
     }
     if (status === 'error') {
       return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffb4ab" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
           <line x1="15" y1="9" x2="9" y2="15" />
           <line x1="9" y1="9" x2="15" y2="15" />
@@ -195,9 +195,9 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
   };
 
   const getStatusColor = (status: 'running' | 'done' | 'error') => {
-    if (status === 'done') return '#14B8A6';
-    if (status === 'error') return '#F87171';
-    return '#818cf8';
+    if (status === 'done') return '#4edea3';
+    if (status === 'error') return '#ffb4ab';
+    return '#bef264';
   };
 
   const hasCompleted = stepStatuses.get('complete') === 'done';
@@ -218,12 +218,12 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: hasErrored ? '#F87171' : hasCompleted ? '#14B8A6' : '#818cf8',
+            background: hasErrored ? '#ffb4ab' : hasCompleted ? '#4edea3' : '#bef264',
             boxShadow: hasErrored
-              ? '0 0 8px rgba(248,113,113,0.6)'
+              ? '0 0 8px rgba(255,180,171,0.6)'
               : hasCompleted
-                ? '0 0 8px rgba(20,184,166,0.6)'
-                : '0 0 8px rgba(129,140,248,0.6)',
+                ? '0 0 8px rgba(78,222,163,0.6)'
+                : '0 0 8px rgba(190,242,100,0.6)',
             animation: !hasCompleted && !hasErrored ? 'pulse-glow 2s infinite' : 'none',
           }} />
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -253,7 +253,7 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
           <span style={{
             fontSize: '0.75rem',
             fontWeight: 700,
-            color: hasCompleted ? '#14B8A6' : '#818cf8',
+            color: hasCompleted ? '#4edea3' : '#bef264',
             fontVariantNumeric: 'tabular-nums',
           }}>
             {progressPct}%
@@ -266,7 +266,7 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
         width: '100%',
         height: 4,
         borderRadius: 99,
-        background: 'rgba(99,102,241,0.1)',
+        background: 'rgba(190,242,100,0.08)',
         marginBottom: '1.25rem',
         overflow: 'hidden',
       }}>
@@ -275,10 +275,10 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
           borderRadius: 99,
           width: `${progressPct}%`,
           background: hasErrored
-            ? 'linear-gradient(90deg, #F87171, #ef4444)'
+            ? 'linear-gradient(90deg, #ffb4ab, #ef4444)'
             : hasCompleted
-              ? 'linear-gradient(90deg, #14B8A6, #2dd4bf)'
-              : 'linear-gradient(90deg, #6366F1, #818cf8)',
+              ? 'linear-gradient(90deg, #4edea3, #bef264)'
+              : 'linear-gradient(90deg, #bef264, #4edea3)',
           transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
         }} />
       </div>
@@ -316,9 +316,9 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
                 padding: '0.5rem 0.75rem',
                 borderRadius: 10,
                 background: isLatest && ev.status === 'running'
-                  ? 'rgba(99,102,241,0.06)'
+                  ? 'rgba(190,242,100,0.04)'
                   : ev.status === 'error'
-                    ? 'rgba(239,68,68,0.06)'
+                    ? 'rgba(255,180,171,0.06)'
                     : 'transparent',
                 borderLeft: `3px solid ${getStatusColor(ev.status)}`,
                 transition: 'all 0.3s ease',
@@ -336,7 +336,7 @@ export default function OrchestrationProgress({ queryId, onComplete, onError, on
                   <span style={{
                     fontSize: '0.85rem',
                     fontWeight: 600,
-                    color: ev.status === 'error' ? '#F87171' : '#F8FAFC',
+                    color: ev.status === 'error' ? '#ffb4ab' : '#e5e2e1',
                   }}>
                     {ev.message}
                   </span>

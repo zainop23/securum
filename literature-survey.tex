@@ -1,0 +1,36 @@
+\chapter{LITERATURE SURVEY}
+% Add details as per your project
+
+\section{Introduction}
+
+This project, Securum, addresses a core challenge in collaborative analytics: multiple organizations need joint statistics without exposing raw records to each other or to a central platform. The system is designed as a self-hosted, multi-organization analytics platform where each organization keeps data in its own PostgreSQL database, while a coordinator computes only combined aggregates such as COUNT, SUM, AVG, and GROUP BY summaries. The architecture follows a distributed privacy-preserving approach aligned with clean-room and federated analytics trends discussed in recent literature [2], [3], [15].
+
+The survey focus is motivated by two technical requirements in our implementation plan: (i) strong privacy guarantees using differential privacy with explicit epsilon budgeting, and (ii) integrity of cross-organization computation through commit--reveal style verification. Recent advances in differential privacy calibration and budget allocation in distributed settings [1], [4], [10] support our decision to add Laplace noise at organization nodes and track cumulative privacy spend at the coordinator. Similarly, secure aggregation and verifiable multiparty protocols [6], [9], [11] justify protocol-level safeguards against result tampering.
+
+From a systems perspective, Securum combines concepts from secure multiparty computation, federated learning, and data clean rooms into a practical monorepo deployment with coordinator, org-node services, and dashboard interfaces. This is consistent with the movement from theory-heavy privacy research toward deployable engineering frameworks [8], [12], [14]. Therefore, the literature survey is structured to evaluate prior work across privacy mechanisms, protocol integrity, multi-party scalability, and real-world platform adoption.
+
+\section{Related Works}
+% with the citation of the References
+% Box et al.(1970)[1] Proposed the ARIMA model for time-series forecasting.
+% Relevance: Used as a baseline model in many air quality prediction studies.
+% Findings: Achieved moderate accuracy with small datasets but required careful feature engineering.
+% Limitation: Limited in handling non-linear patterns in data.
+% 15 papers considered for the mini project.
+
+Recent studies on federated and collaborative analytics emphasize that privacy quality depends not only on adding noise, but on how noise is calibrated to data distributions and query patterns. Alborch et al. optimize differential privacy under known input distributions, highlighting utility improvements with principled tuning [1]. Zhu et al. further show that dynamic privacy budget allocation can outperform static epsilon policies in federated scenarios [4]. These findings are directly relevant to our platform's privacy budget table and epsilon-per-query controls, where each organization consumes budget over repeated analytics rounds.
+
+Clean-room style data collaboration is discussed as an operational model for privacy-first enterprise analytics [2], [15]. These works reinforce our design choice that organizations should never export raw rows and should share only approved aggregate outputs. Dayama et al. describe secure multiparty data room infrastructure [11], while Bhattacharya et al. propose hybrid differential privacy plus secure multiparty computation for privacy-preserving entity workflows [12]. Our approach is aligned with this hybrid mindset: differential privacy protects released statistics, and protocol orchestration protects computation integrity.
+
+On the protocol side, Veugen et al. analyze secure aggregation with participation thresholds, which informs our quorum-oriented orchestration flow [6]. Gai et al. present public-verification mechanisms for robust multiparty computation [9], motivating our commit--reveal verification logic that rejects inconsistent reveals. Although Zhou et al. focus on cross-chain transaction latency [5], their optimistic-execution perspective is useful for understanding performance trade-offs in multi-party coordination where network delays and partial failures are expected.
+
+Broader surveys provide ecosystem-level support for our architecture. Rahman reviews privacy-preserving collaborative intelligence in federated learning and highlights practical issues such as communication overhead and trust assumptions [3]. Li et al. summarize secure multi-party learning frameworks and emerging applications, indicating that deployment complexity remains a key barrier [8]. Khan et al. demonstrate healthcare-specific multiparty learning use cases [13], and Sharma et al. discuss zero-trust cryptographic and differential privacy combinations for scalable analytics [14]. Abdelzaher et al. add an important data-quality perspective, reminding that secure analytics still depends on consistent, well-managed input data pipelines [7].
+
+Taken together, these works justify the main implementation choices in our plan: allowlisted query validation and schema rewriting at org-nodes, local execution over private databases, Laplace-noised outputs, commit--reveal verification, quorum thresholds, and auditable coordinator logs. The literature also clarifies limitations that our project openly acknowledges, especially trusted-but-curious coordinator assumptions and potential collusion risks in non-cryptographic aggregation settings.
+
+\section{Conclusion of Survey}
+
+The surveyed literature establishes that no single technique is sufficient for secure collaborative analytics at scale. Differential privacy offers formal protection against individual-level inference [1], [4], [10], but requires disciplined budget governance over repeated queries. Secure aggregation and multiparty verification approaches improve robustness and trust [6], [9], [11], yet practical deployments still face usability and systems-integration challenges [2], [8], [15].
+
+Based on this evidence, our project adopts a layered strategy: privacy-preserving local computation at organization nodes, coordinator-managed orchestration with commit--reveal integrity checks, and explicit privacy budget accounting for composition control. This design balances implementability and security for a mini-project scale while remaining transparent about trust assumptions and out-of-scope protections.
+
+Therefore, the literature survey supports the technical direction of Securum and provides a clear foundation for the implementation phases. It confirms that our architecture is relevant to current research trends and industry practices, while also identifying future extensions such as stronger cryptographic aggregation, stricter adversarial models, and adaptive privacy budgeting policies.
