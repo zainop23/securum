@@ -6,3 +6,5 @@ dist/
 .vscode/
 docker/postgres-data/
 *.log
+phase*.md
+PLAN.md

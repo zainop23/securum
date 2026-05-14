@@ -5,8 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "ts-node src/index.ts",
-    "test": "vitest run src/__tests__"
+    "dev": "ts-node src/index.ts"
   },
   "dependencies": {
     "@securum/shared": "*",
@@ -20,7 +19,6 @@
     "@types/cors": "^2.8.17",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.3",
-    "ts-node": "^10.9.2",
-    "vitest": "^4.0.18"
+    "ts-node": "^10.9.2"
   }
 }
